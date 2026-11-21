@@ -88,6 +88,13 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 .dem+.dem{border-top:1px dashed var(--line)}
 .dem.sel{background:var(--signal);color:var(--signal-ink)}
 .dem .pay{font-weight:700;white-space:nowrap}
+.demrow{display:flex;align-items:stretch;gap:2px;border-radius:8px}
+.demrow+.demrow{border-top:1px dashed var(--line)}
+.demrow .dem{flex:1;min-width:0}
+.demrow.tagged{box-shadow:inset 3px 0 0 var(--signal)}
+.dem .onb{display:block;font-size:11px;font-weight:700;opacity:.75}
+.tag{border:0;background:none;border-radius:8px;width:40px;flex:none;font-size:17px;cursor:pointer;opacity:.3;filter:grayscale(1)}
+.tag.on{opacity:1;filter:none;background:var(--sheet)}
 .dem .ok{font-weight:700}
 .loads{display:flex;gap:6px;flex-wrap:wrap}
 .load{display:inline-flex;align-items:center;gap:6px;background:var(--sheet);border:2px solid var(--line);border-radius:999px;padding:4px 6px 4px 12px;font-weight:700;font-size:14px}
@@ -257,7 +264,7 @@ const EV_STYLE={derail:{label:'Derailment',color:'rgba(214,40,57,.22)',stroke:'#
 function newGame(opts){return{v:2,id:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6),rev:0,status:'setup',created:Date.now(),len:opts.len||'short',map:opts.map||'na',eventsOn:opts.eventsOn!==false,players:[],track:{},turn:null,seq:[],log:[],events:[],lastEvent:null,winner:null};}
 function addPlayer(g,seat,name,color){g.players.push({seat,name,color,cash:50,train:0,pos:null,loads:[],stalled:false,cards:[makeCard(),makeCard(),makeCard()]});}
 function log(g,s){g.log.unshift(s);g.log=g.log.slice(0,30);}
-function startGame(g){const n=g.players.length,a=[...Array(n).keys()];g.seq=[...a,...a.slice().reverse()];g.status='playing';g.turn=null;beginTurn(g,g.seq[0],'init',0);log(g,'Game on. Everyone gets two building turns first.');}
+function startGame(g){const n=g.players.length,r=Math.floor(Math.random()*n),a=[...Array(n).keys()].map(i=>(i+r)%n);g.seq=[...a,...a.slice().reverse()];g.status='playing';g.turn=null;beginTurn(g,g.seq[0],'init',0);log(g,'Coin flip: '+g.players[g.seq[0]].name+' builds first. Everyone gets two building turns.');}
 function inEvent(g,type,node){return(g.events||[]).some(e=>e.type===type&&e.center!=null&&regionSet(e.center,e.r).has(node));}
 function floodedRivers(g){return(g.events||[]).filter(e=>e.type==='flood').map(e=>e.river);}
 function beginTurn(g,p,kind,seqIdx){const pl=g.players[p],sp=TRAINS[pl.train].speed;let moves=sp;
@@ -349,6 +356,21 @@ function runBotTurn(){if(!G||G.status!=='playing')return;const t=G.turn,p=t.p,pl
 let botTimer=null;
 function scheduleBot(){if(mode!=='local'||!G||G.status!=='playing'||!isBot(curP())||botTimer||!$('#overlay').hidden)return;botTimer=setTimeout(()=>{botTimer=null;if($('#overlay').hidden)runBotTurn();else scheduleBot();},900);}
 let lastHumanSeat=0;
+
+/* ================= Route planner ================= */
+function planBuild(g,p,start,targets,netOnly){const planned=new Map(),paths=[];const fl=floodedRivers(g);let from=start;
+  for(const T of targets){const srcs=from!=null?[from]:netOnly?[...netNodes(g,p)]:[...new Set([...netNodes(g,p),...MAJORS])];
+    const r=dijkstra(srcs,(u,v,info)=>{const k=key(u,v),o=g.track[k];if(o===p||planned.has(k))return 0;if(o!==undefined)return null;if(fl.length&&info.rivers.some(x=>fl.includes(x)))return null;if(inEvent(g,'snow',v)||inEvent(g,'snow',u))return null;return baseCost(v,info);});
+    if(!isFinite(r.dist[T]))return null;if(from==null&&r.dist[T]===0)return null;
+    const path=walk(r.prev,T);for(let i=0;i<path.length-1;i++){const k=key(path[i],path[i+1]);if(g.track[k]!==p&&!planned.has(k))planned.set(k,baseCost(path[i+1],EDGE.get(k)));}
+    paths.push(path);if(start==null)start=path[0];from=T;}
+  let cost=0;for(const c of planned.values())cost+=c;return{type:'build',start,targets,paths,edges:[...planned.keys()],cost};}
+function undoLeg(){if(!preview||preview.type!=='build')return;const tg=preview.targets.slice(0,-1);preview=tg.length?planBuild(G,G.turn.p,preview.start,tg):{type:'build',start:preview.start,targets:[],paths:[],edges:[],cost:0};render();}
+/* ---------- load tags (private to this phone) ---------- */
+const tagId=d=>d.good+'>'+d.dest;
+function tagKey(){return G?'wr-tags-'+(G.id||gid)+'-'+mySeatIndex():null;}
+function getTags(){try{return JSON.parse(ls(tagKey())||'[]');}catch{return[];}}
+function toggleTag(id){const a=getTags();const i=a.indexOf(id);if(i>=0)a.splice(i,1);else a.push(id);ls(tagKey(),JSON.stringify(a));render();}
 
 /* ================= App state ================= */
 let G=null,mode='lobby',gid=null,preview=null,selCity=null,selDemand=null,sheetState='normal',lastTurnSeen=null,lastEventSeen=0;
@@ -454,9 +476,13 @@ function onTap(node){
   if(G&&canAct()){
     const t=G.turn,pl=curP();
     if(t.phase==='build'&&!t.upgraded){
-      if(preview&&preview.type==='build'&&preview.target===node){doBuild();return;}
-      const bp=buildPath(G,t.p,node);preview=bp?{type:'build',target:node,...bp}:null;
-      if(!bp&&!selCity)toast('Can’t build there. Track has to start at a major city or your own line.');
+      if(preview&&preview.type==='build'){const last=preview.targets.length?preview.targets[preview.targets.length-1]:null;
+        if(last===node){doBuild();return;}
+        if(node===preview.start&&!preview.targets.length){preview=null;render();return;}
+        const np=planBuild(G,t.p,preview.start,[...preview.targets,node]);if(np)preview=np;else toast('Can’t reach that dot from your planned route.');}
+      else if(MAJORS.includes(node)&&netNodes(G,t.p).size&&!netNodes(G,t.p).has(node)){const np=planBuild(G,t.p,null,[node],true);preview=np?Object.assign(np,{altStart:node}):{type:'build',start:node,targets:[],paths:[],edges:[],cost:0};}
+      else if(netNodes(G,t.p).has(node)||MAJORS.includes(node)){preview={type:'build',start:node,targets:[],paths:[],edges:[],cost:0};}
+      else{const np=planBuild(G,t.p,null,[node]);preview=np;if(!np&&!selCity)toast('Can’t build there. Track has to start at a major city or your own line.');}
     }else if(t.phase==='move'&&t.kind==='op'){
       if(pl.pos==null){if(CITY.has(node)&&netNodes(G,t.p).has(node)){placeTrain(node);return;}toast('Tap a city on your own track to place your train.');}
       else{if(preview&&preview.type==='move'&&preview.target===node){doMove();return;}const mp=movePlan(G,node);preview=mp?{type:'move',target:node,...mp}:null;}
@@ -503,7 +529,9 @@ function paint(){
   if(selD){for(const sn of GOODS[selD.good]){const m=NODES[CITY_BY_NAME[sn]];if(!m)continue;ctx.fillStyle='rgba(242,183,5,.35)';ctx.beginPath();ctx.arc(m.x,m.y,0.9*u,0,6.283);ctx.fill();ring(m,0.9*u,SRC,0.16*u,[0.25*u,0.16*u]);}
     const dn=NODES[selD.dest];ctx.fillStyle='rgba(255,46,136,.3)';ctx.beginPath();ctx.arc(dn.x,dn.y,1.05*u,0,6.283);ctx.fill();ring(dn,1.05*u,DEST,0.24*u);ring(dn,1.35*u,DEST,0.08*u);}
   if(G&&G.status==='playing'&&canAct()&&G.turn.phase==='move'&&G.turn.kind==='op'){const mm=moveMap(G);if(mm){ctx.fillStyle='rgba(242,183,5,.55)';for(let i=0;i<NODES.length;i++){if(mm.dist[i]>0&&isFinite(mm.dist[i])){ctx.beginPath();ctx.arc(NODES[i].x,NODES[i].y,0.2*u,0,6.283);ctx.fill();}}}else if(curP().pos==null){const net=netNodes(G,G.turn.p);for(const[i]of CITY)if(net.has(i))ring(NODES[i],0.8*u,SRC,0.16*u);}}
-  if(preview){const pts=preview.path.map(i=>[NODES[i].x,NODES[i].y]);ctx.strokeStyle='#1C2530';ctx.lineWidth=0.34*u;line(pts);ctx.strokeStyle=preview.type==='build'?'#F2B705':'#FFFFFF';ctx.lineWidth=0.2*u;ctx.setLineDash([0.35*u,0.2*u]);line(pts);ctx.setLineDash([]);const e=pts[pts.length-1];ctx.fillStyle='#F2B705';ctx.beginPath();ctx.arc(e[0],e[1],0.3*u,0,6.283);ctx.fill();ctx.strokeStyle='#1C2530';ctx.lineWidth=0.08*u;ctx.stroke();}
+  if(preview){const paths=preview.paths||[preview.path];for(const pth of paths){if(pth.length<2)continue;const pts=pth.map(i=>[NODES[i].x,NODES[i].y]);ctx.strokeStyle='#1C2530';ctx.lineWidth=0.34*u;line(pts);ctx.strokeStyle=preview.type==='build'?'#F2B705':'#FFFFFF';ctx.lineWidth=0.2*u;ctx.setLineDash([0.35*u,0.2*u]);line(pts);ctx.setLineDash([]);}
+    const dots=preview.type==='build'?preview.targets:[preview.path[preview.path.length-1]];dots.forEach((d,i)=>{const n=NODES[d];const last=i===dots.length-1;ctx.fillStyle=last?'#F2B705':'#FFFFFF';ctx.beginPath();ctx.arc(n.x,n.y,(last?0.32:0.24)*u,0,6.283);ctx.fill();ctx.strokeStyle='#1C2530';ctx.lineWidth=0.08*u;ctx.stroke();});
+    if(preview.type==='build'&&preview.start!=null){const n=NODES[preview.start];ring(n,0.75*u,'#1C2530',0.22*u);ring(n,0.75*u,'#F2B705',0.12*u);}}
   if(selCity!=null)ring(NODES[selCity],1.0*u,'#FFFFFF',0.12*u);
   // screen space
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.textAlign='center';ctx.textBaseline='top';ctx.lineJoin='round';const su=s*u;
@@ -594,20 +622,23 @@ function setupHtml(){
   h+='<p style="margin-top:16px" class="row"><button class="btn go" type="button" data-act="start"'+(G.players.length<2?' disabled':'')+'>Start game</button><button class="btn" type="button" data-act="lobby">Back</button></p>';
   return h;
 }
-function demandHtml(pl,ci,canDel){return'<div class="card">'+pl.cards[ci].map((d,di)=>{const sel=selDemand&&selDemand.c===ci&&selDemand.d===di;const ok=canDel&&pl.pos===d.dest&&pl.loads.includes(d.good);return'<button type="button" class="dem'+(sel?' sel':'')+'" data-act="dem" data-c="'+ci+'" data-d="'+di+'"><span>'+esc(d.good)+' → '+esc(CITY.get(d.dest).name)+(ok?' <span class="ok">✓</span>':'')+'</span><span class="pay">$'+d.pay+'M</span></button>';}).join('')+'</div>';}
+function demandHtml(pl,ci,canDel,tags){return'<div class="card">'+pl.cards[ci].map((d,di)=>{const sel=selDemand&&selDemand.c===ci&&selDemand.d===di;const ok=canDel&&pl.pos===d.dest&&pl.loads.includes(d.good);const id=tagId(d),on=tags.includes(id);return'<div class="demrow'+(on?' tagged':'')+'"><button type="button" class="dem'+(sel?' sel':'')+'" data-act="dem" data-c="'+ci+'" data-d="'+di+'"><span>'+esc(d.good)+' → '+esc(CITY.get(d.dest).name)+(ok?' <span class="ok">✓</span>':'')+(on?'<span class="onb">On board</span>':'')+'</span><span class="pay">$'+d.pay+'M</span></button><button type="button" class="tag'+(on?' on':'')+'" data-act="tag" data-t="'+esc(id)+'" aria-pressed="'+on+'" aria-label="Mark '+esc(d.good)+' for '+esc(CITY.get(d.dest).name)+' as on board">📦</button></div>';}).join('')+'</div>';}
 function playHtml(){
-  const t=G.turn,cp=curP(),me=canAct(),L=LENGTHS[G.len];const vi=mySeatIndex();const viewer=vi>=0?G.players[vi]:null;
+  const t=G.turn,cp=curP(),me=canAct(),L=LENGTHS[G.len];let tags=[];const vi=mySeatIndex();const viewer=vi>=0?G.players[vi]:null;
   let h='';
   if(G.status==='over')h+='<div class="status"><span class="dot" style="background:'+G.players[G.winner].color+'"></span>'+esc(G.players[G.winner].name)+' won the game</div><p class="row"><button class="btn" type="button" data-act="lobby">Back to games</button>'+(mode==='link'?'<button class="btn" type="button" data-act="share">Send final map</button>':'')+'</p>';
   else{const ph=t.kind==='init'?'Building ('+(t.seqIdx<G.players.length?'first':'second')+' round)':t.phase==='move'?'Moving':'Building';
     h+='<div class="status"><span class="dot" style="background:'+cp.color+'"></span>'+(me?(mode==='local'?esc(cp.name)+': ':'Your turn: ')+ph:isBot(cp)?esc(cp.name)+' (computer) is taking its turn…':'Waiting for '+esc(cp.name))+'</div>';
+    if(t.kind==='init')h+='<p class="small muted">Build order: '+G.seq.map((p,i)=>i===t.seqIdx?'<b style="color:var(--text)">'+esc(G.players[p].name)+'</b>':esc(G.players[p].name)).join(' → ')+'</p>';
     if(!me&&mode==='link'&&vi>=0)h+='<p class="row"><button class="btn go" type="button" data-act="share">Send turn link again</button><button class="btn" type="button" data-act="copyLink">Copy link</button></p>';
     if(mode==='online'&&backend==='fire'&&vi<0)h+='<div class="box"><p><b>Playing on a new phone?</b> Tap your name to take your seat.</p><div class="row">'+G.players.map((p,i)=>'<button class="btn" type="button" data-act="claim" data-i="'+i+'"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'+p.color+';margin-right:6px;vertical-align:-1px"></span>'+esc(p.name)+'</button>').join('')+'</div></div>';
     if(!me&&mode==='link'&&vi<0)h+='<p><button class="btn" type="button" data-act="pickSeat">Choose who you are</button></p>';}
   if(G.status==='playing'&&me){
-    if(preview&&preview.type==='build'){const left=BUILD_BUDGET-t.spent;const ok=preview.cost<=left&&preview.cost<=cp.cash;h+='<div class="box hl"><p><b>'+preview.edges.length+' segment'+(preview.edges.length>1?'s':'')+' for $'+preview.cost+'M</b> <span class="muted">($'+left+'M left this turn)</span></p>'+(ok?'':'<p class="small" style="color:var(--danger)">'+(preview.cost>cp.cash?'Not enough cash.':'Over the $20M turn limit. Pick a closer dot.')+'</p>')+'<div class="row"><button class="btn go" type="button" data-act="build"'+(ok?'':' disabled')+'>Build it</button><button class="btn" type="button" data-act="clear">Cancel</button></div></div>';}
+    if(preview&&preview.type==='build'){const left=BUILD_BUDGET-t.spent;const sn=CITY.get(preview.start);
+      if(!preview.targets.length)h+='<div class="box hl"><p><b>Building from '+(sn?esc(sn.name):'this spot')+'.</b></p><p class="small muted">Tap dots to plan your route. Each tap adds a stop, and you can end on your own track to join two lines.</p><div class="row"><button class="btn" type="button" data-act="clear">Cancel</button></div></div>';
+      else{const ok=preview.cost<=left&&preview.cost<=cp.cash&&preview.edges.length>0;h+='<div class="box hl"><p><b>'+(preview.edges.length?preview.edges.length+' segment'+(preview.edges.length>1?'s':'')+' for $'+preview.cost+'M':'Already built')+'</b> <span class="muted">($'+left+'M left this turn)</span></p>'+(preview.edges.length&&!ok?'<p class="small" style="color:var(--danger)">'+(preview.cost>cp.cash?'Not enough cash.':'Over the $20M turn limit. Undo a stop or pick a closer dot.')+'</p>':'')+'<p class="small muted">Tap more dots to keep planning, or tap the last dot again to build.</p><div class="row"><button class="btn go" type="button" data-act="build"'+(ok?'':' disabled')+'>Build it</button><button class="btn" type="button" data-act="undoLeg">Undo last stop</button><button class="btn" type="button" data-act="clear">Cancel</button></div>'+(preview.altStart!=null&&preview.targets.length===1?'<p style="margin:10px 0 0"><button class="btn" type="button" data-act="altStart">Build out of '+esc(CITY.get(preview.altStart).name)+' instead</button></p>':'')+'</div>';}}
     if(preview&&preview.type==='move'){h+='<div class="box hl"><p><b>Move '+preview.steps+' milepost'+(preview.steps>1?'s':'')+'</b>'+(preview.fee?' · pay $'+preview.fee+'M track fee':'')+'</p><div class="row"><button class="btn go" type="button" data-act="move">Go</button><button class="btn" type="button" data-act="clear">Cancel</button></div></div>';}
-    if(t.kind==='init'){h+='<p class="muted small">Tap a dot to sketch track from any major city (hexagon). Tap again, or press Build, to lay it. $'+(BUILD_BUDGET-t.spent)+'M left to spend this turn.</p><div class="row">'+(t.builds.length?'<button class="btn" type="button" data-act="undo">Undo last build</button>':'')+'<button class="btn go" type="button" data-act="end">End turn</button></div>';}
+    if(t.kind==='init'){h+='<p class="muted small">Tap a major city (hexagon) to build from it, then tap dots to plan your route and press Build. $'+(BUILD_BUDGET-t.spent)+'M left to spend this turn.</p><div class="row">'+(t.builds.length?'<button class="btn" type="button" data-act="undo">Undo last build</button>':'')+'<button class="btn go" type="button" data-act="end">End turn</button></div>';}
     else if(t.phase==='move'){
       if(cp.pos==null)h+='<p class="muted small">Place your train: tap any city your track reaches.</p>';
       else{h+='<p class="muted small">'+t.moves+' of '+TRAINS[cp.train].speed+' mileposts left'+(t.moves<TRAINS[cp.train].speed&&!t.acted?' (slowed by trouble on the line)':'')+'. Tap a highlighted dot to move.</p>';
@@ -617,7 +648,7 @@ function playHtml(){
       h+='<div class="row"><button class="btn go" type="button" data-act="doneMove"'+(cp.pos==null?' disabled':'')+'>Done moving, now build</button>'+(!t.acted?'<button class="btn warn" type="button" data-act="discard">Swap all cards (ends turn)</button>':'')+'</div>';
     }else{
       if(t.upgraded)h+='<p class="muted small">You upgraded this turn, so no building.</p>';
-      else{h+='<p class="muted small">Tap a dot to sketch track, tap again to build. $'+(BUILD_BUDGET-t.spent)+'M left this turn.</p>';if(t.spent===0&&UPG[cp.train].length)h+='<div class="row" style="margin-bottom:8px">'+UPG[cp.train].map(u=>'<button class="btn" type="button" data-act="upg" data-u="'+u+'">Upgrade to '+TRAINS[u].name+' ($20M)</button>').join('')+'</div>';}
+      else{h+='<p class="muted small">Tap your track or a major city to build from it, or just tap a dot. Keep tapping to plan a route, then press Build. $'+(BUILD_BUDGET-t.spent)+'M left this turn.</p>';if(t.spent===0&&UPG[cp.train].length)h+='<div class="row" style="margin-bottom:8px">'+UPG[cp.train].map(u=>'<button class="btn" type="button" data-act="upg" data-u="'+u+'">Upgrade to '+TRAINS[u].name+' ($20M)</button>').join('')+'</div>';}
       h+='<div class="row">'+(t.builds.length?'<button class="btn" type="button" data-act="undo">Undo last build</button>':'')+'<button class="btn go" type="button" data-act="end">End turn</button></div>';
     }
   }
@@ -625,7 +656,7 @@ function playHtml(){
   if((G.events||[]).length)h+='<h2>Trouble on the line</h2><ul class="log ev">'+G.events.map(e=>'<li>'+EV_STYLE[e.type].icon+' '+esc(e.text)+'</li>').join('')+'</ul>';
   if(viewer){const tr=TRAINS[viewer.train];
     h+='<h2>'+(mode==='local'?esc(viewer.name)+'’s train':'Your train')+': '+tr.name+' · speed '+tr.speed+' · holds '+tr.cap+'</h2><div class="loads">'+(viewer.loads.length?viewer.loads.map((l,i)=>'<span class="load">'+esc(l)+(me&&viewer===cp?'<button type="button" data-act="dump" data-i="'+i+'" aria-label="Dump '+esc(l)+'">×</button>':'')+'</span>').join(''):'<span class="empty-load">Empty</span>')+'</div>';
-    h+='<h2>Demand cards</h2><p class="small legend"><span class="key" style="background:var(--src)"></span>Pick up &nbsp; <span class="key" style="background:var(--dest)"></span>Deliver. Tap a demand to light up the map.</p><div class="cards">'+viewer.cards.map((_,ci)=>demandHtml(viewer,ci,me&&viewer===cp)).join('')+'</div>';}
+    h+='<h2>Demand cards</h2>'+(()=>{const all=viewer.cards.flat().map(tagId);tags=getTags();const kept=tags.filter(x=>all.includes(x));if(kept.length!==tags.length){tags=kept;ls(tagKey(),JSON.stringify(kept));}return'';})()+'<p class="small legend"><span><span class="key" style="background:var(--src)"></span> Pick up</span><span style="margin-left:10px"><span class="key" style="background:var(--dest)"></span> Deliver</span></p><p class="small muted" style="margin-top:0">Tap a demand to light up the map. Tap 📦 to mark what you’re carrying it for.</p><div class="cards">'+viewer.cards.map((_,ci)=>demandHtml(viewer,ci,me&&viewer===cp,tags)).join('')+'</div>';}
   h+='<p class="goal muted" style="margin-top:12px">Goal: $'+L.cash+'M and '+L.majors+' of 8 major cities linked. Map: '+esc(MAPS[G.map].name)+'.</p>';
   if(G.log.length)h+='<h2>Recent</h2><ul class="log">'+G.log.slice(0,6).map(l=>'<li>'+esc(l)+'</li>').join('')+'</ul>';
   return h;
@@ -664,6 +695,9 @@ document.addEventListener('click',async e=>{
     case 'move':doMove();break;
     case 'clear':preview=null;render();break;
     case 'undo':undoBuild();break;
+    case 'undoLeg':undoLeg();break;
+    case 'altStart':if(preview&&preview.altStart!=null){preview={type:'build',start:preview.altStart,targets:[],paths:[],edges:[],cost:0};render();}break;
+    case 'tag':toggleTag(b.dataset.t);break;
     case 'end':finishTurn();break;
     case 'doneMove':doneMoving();break;
     case 'discard':if(confirm('Swap all three cards for new ones? This ends your turn.'))discardHand();break;
