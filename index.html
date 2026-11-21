@@ -291,6 +291,65 @@ function applyEvent(g,by){
 }
 function drawCard(g,by){if(g.eventsOn&&Math.random()<EVENT_CHANCE)applyEvent(g,by);return makeCard();}
 
+/* ================= Computer players ================= */
+const BOT_NAMES=['Rusty','Casey','Dusty','Annie'];
+const isBot=pl=>!!(pl&&pl.bot);
+function trackDistFrom(g,start){return dijkstra([start],(u,v,info)=>{const o=g.track[key(u,v)];if(o===undefined)return null;return info.ferry?info.ferry.moves:1;});}
+function ownComp(g,p,start){const s=new Set([start]);const q=[start];while(q.length){const u=q.pop();for(const e of ADJ[u]){if(s.has(e.j))continue;if(g.track[key(u,e.j)]===p){s.add(e.j);q.push(e.j);}}}return s;}
+function botSources(g,p){const pl=g.players[p];const net=netNodes(g,p);if(!net.size)return MAJORS.slice();if(pl.pos!=null&&net.has(pl.pos))return[...ownComp(g,p,pl.pos)];let best=null;for(const m of MAJORS)if(net.has(m)){const c=ownComp(g,p,m);if(!best||c.size>best.size)best=c;}return best?[...best]:[...net];}
+function botW(g,p){const fl=floodedRivers(g);return(u,v,info)=>{const o=g.track[key(u,v)];if(o===p)return 0;if(o!==undefined)return null;if(fl.length&&info.rivers.some(x=>fl.includes(x)))return null;if(inEvent(g,'snow',v)||inEvent(g,'snow',u))return null;return baseCost(v,info);};}
+function botPlan(g,p){const pl=g.players[p];const w=botW(g,p);const srcs=botSources(g,p);const fromNet=dijkstra(srcs,w);let best=null;
+  pl.cards.forEach((card,ci)=>card.forEach((d,di)=>{const have=pl.loads.includes(d.good);const sources=have?[null]:GOODS[d.good].map(n=>CITY_BY_NAME[n]).filter(x=>x!=null);
+    for(const s of sources){let cost,hops;if(have){cost=fromNet.dist[d.dest];hops=fromNet.hops[d.dest];}else{const r2=dijkstra([s],w);cost=fromNet.dist[s]+r2.dist[d.dest];hops=r2.hops[d.dest];}
+      if(!isFinite(cost))continue;let score=d.pay-cost-0.3*hops;if(cost>pl.cash)score-=(cost-pl.cash)*1.5;
+      const prev=pl.bot.plan;if(prev&&prev.good===d.good&&prev.dest===d.dest)score+=5;
+      if(!best||score>best.score)best={ci,di,good:d.good,dest:d.dest,src:s,score};}}));
+  pl.bot.plan=best;return best;}
+function botBuildToward(g,p,srcs,target,budget){const r=dijkstra(srcs,botW(g,p));if(!isFinite(r.dist[target])||r.dist[target]===0)return 0;const path=walk(r.prev,target);let spent=0;
+  for(let i=0;i<path.length-1;i++){const u=path[i],v=path[i+1],k=key(u,v);if(g.track[k]===p)continue;const c=baseCost(v,EDGE.get(k));if(spent+c>budget)break;spent+=c;g.track[k]=p;}return spent;}
+function botBuild(g,p){const t=g.turn,pl=g.players[p];
+  if(t.kind==='op'&&t.spent===0){const d=pl.bot.deliveries||0;let to=null;if(pl.train===0&&pl.cash>=50&&d>=2)to=1;else if((pl.train===1||pl.train===2)&&pl.cash>=85&&d>=6)to=3;
+    if(to!=null){pl.cash-=UPGRADE_COST;pl.train=to;t.upgraded=true;t.spent=BUILD_BUDGET;log(g,pl.name+' upgraded to '+TRAINS[to].name+'.');return;}}
+  const reserve=t.kind==='init'?0:6;const budget=()=>Math.min(BUILD_BUDGET-t.spent,pl.cash-reserve);let total=0;
+  const spend=n=>{if(n>0){pl.cash-=n;t.spent+=n;total+=n;}};
+  const plan=pl.bot.plan;
+  if(plan){const tg=[];if(!pl.loads.includes(plan.good)&&plan.src!=null)tg.push(plan.src);tg.push(plan.dest);
+    for(const T of tg){if(budget()<=0)break;const srcs=botSources(g,p);if(srcs.includes(T)&&netNodes(g,p).size)continue;spend(botBuildToward(g,p,srcs,T,budget()));if(!botSources(g,p).includes(T))break;}}
+  const L=LENGTHS[g.len];const doneWithPlan=!plan||botSources(g,p).includes(plan.dest);
+  if(budget()>=3&&netNodes(g,p).size&&((doneWithPlan&&pl.cash>=30)||pl.cash>=L.cash*0.6)){const srcs=botSources(g,p);const set=new Set(srcs);const r=dijkstra(srcs,botW(g,p));let best=null;
+    for(const m of MAJORS)if(!set.has(m)&&isFinite(r.dist[m])&&(best==null||r.dist[m]<r.dist[best]))best=m;
+    if(best!=null)spend(botBuildToward(g,p,srcs,best,budget()));}
+  if(total)log(g,pl.name+' laid $'+total+'M of track.');}
+function botCity(g,p){const pl=g.players[p],c=CITY.get(pl.pos);if(!c||inEvent(g,'strike',pl.pos))return;
+  let again=true;while(again){again=false;for(let ci=0;ci<pl.cards.length;ci++)for(let di=0;di<pl.cards[ci].length;di++){const d=pl.cards[ci][di];if(d.dest===pl.pos&&pl.loads.includes(d.good)){pl.loads.splice(pl.loads.indexOf(d.good),1);pl.cash+=d.pay;pl.bot.deliveries=(pl.bot.deliveries||0)+1;log(g,pl.name+' delivered '+d.good+' to '+c.name+' for $'+d.pay+'M.');pl.cards[ci]=drawCard(g,p);g.turn.acted=true;pl.bot.plan=null;again=true;break;}}}
+  const all=pl.cards.flat();pl.loads=pl.loads.filter(x=>all.some(d=>d.good===x));
+  if(!pl.bot.plan)botPlan(g,p);const plan=pl.bot.plan,cap=TRAINS[pl.train].cap,net=netNodes(g,p);
+  const want=[];if(plan&&!pl.loads.includes(plan.good))want.push(plan.good);for(const d of all)if(!want.includes(d.good))want.push(d.good);
+  for(const gd of want){if(pl.loads.length>=cap)break;if(!c.goods.includes(gd))continue;const need=all.filter(d=>d.good===gd).length,have=pl.loads.filter(x=>x===gd).length;if(have>=need)continue;
+    if(!plan||gd!==plan.good){if(!all.some(d=>d.good===gd&&net.has(d.dest)))continue;}pl.loads.push(gd);g.turn.acted=true;}}
+function botGoal(g,p){const pl=g.players[p],td=trackDistFrom(g,pl.pos);let best=null,bd=Infinity;
+  for(const d of pl.cards.flat())if(pl.loads.includes(d.good)){const x=td.dist[d.dest];if(x>0&&x<bd){bd=x;best=d.dest;}}
+  if(best!=null)return best;const plan=pl.bot.plan;if(!plan||pl.loads.includes(plan.good))return null;
+  for(const n of GOODS[plan.good]){const s=CITY_BY_NAME[n];if(s==null||s===pl.pos)continue;const x=td.dist[s];if(x<bd){bd=x;best=s;}}return best;}
+function botMove(g,p){const pl=g.players[p],t=g.turn;for(let guard=0;guard<25;guard++){botCity(g,p);if(t.moves<=0)break;const goal=botGoal(g,p);if(goal==null)break;
+  const dg=trackDistFrom(g,goal);const mm=moveMap(g);if(!mm)break;let bestN=null,bestD=dg.dist[pl.pos];
+  for(let i=0;i<NODES.length;i++){if(!(mm.dist[i]>0&&isFinite(mm.dist[i])))continue;const d=dg.dist[i];if(d<bestD-1e-9||(bestN!=null&&d===bestD&&mm.dist[i]<mm.dist[bestN])){bestD=d;bestN=i;}}
+  if(bestN==null)break;const mp=movePlan(g,bestN);if(!mp||mp.fee>pl.cash-2)break;
+  for(const o of mp.owners){g.players[o].cash+=USE_FEE;t.fees.push(o);}pl.cash-=mp.fee;if(mp.fee)log(g,pl.name+' paid $'+mp.fee+'M to use other track.');pl.pos=bestN;t.moves=Math.max(0,t.moves-mp.steps);t.acted=true;}}
+function runBotTurn(){if(!G||G.status!=='playing')return;const t=G.turn,p=t.p,pl=G.players[p];if(!isBot(pl))return;if(typeof pl.bot!=='object')pl.bot={};
+  try{
+  if(t.kind==='init'){botPlan(G,p);botBuild(G,p);endTurn(G);commit();return;}
+  const plan=botPlan(G,p);
+  if(pl.pos==null){const net=netNodes(G,p);let best=null,bd=Infinity;const ref=plan?(plan.src!=null?plan.src:plan.dest):null;for(const[i]of CITY)if(net.has(i)){const d=ref!=null?(NODES[i].x-NODES[ref].x)**2+(NODES[i].y-NODES[ref].y)**2:0;if(d<bd){bd=d;best=i;}}
+    if(best!=null){pl.pos=best;log(G,pl.name+' set out from '+CITY.get(best).name+'.');}}
+  if(pl.pos!=null&&!pl.loads.length&&plan&&plan.score<-25&&!t.acted){pl.cards=[drawCard(G,p),makeCard(),makeCard()];pl.bot.plan=null;log(G,pl.name+' tossed its cards for a fresh hand.');endTurn(G);commit();return;}
+  if(pl.pos!=null)botMove(G,p);t.phase='build';botBuild(G,p);
+  }catch(e){console.error(e);}
+  endTurn(G);commit();}
+let botTimer=null;
+function scheduleBot(){if(mode!=='local'||!G||G.status!=='playing'||!isBot(curP())||botTimer||!$('#overlay').hidden)return;botTimer=setTimeout(()=>{botTimer=null;if($('#overlay').hidden)runBotTurn();else scheduleBot();},900);}
+let lastHumanSeat=0;
+
 /* ================= App state ================= */
 let G=null,mode='lobby',gid=null,preview=null,selCity=null,selDemand=null,sheetState='normal',lastTurnSeen=null,lastEventSeen=0;
 let db=null,userCap=null,seatId=null,unsubGame=null,lobbyGames=[],dbReady=false,dbTried=false,backend='claude',fireError=null;
@@ -303,8 +362,8 @@ function deviceId(){let d=ls('wr-device');if(!d){d='dev-'+Math.random().toString
 const curP=()=>G&&G.turn?G.players[G.turn.p]:null;
 function linkSeat(){if(!G)return null;if(seatMem[G.id]!=null)return seatMem[G.id];const v=ls('wr-seat-'+G.id);return v==null?null:+v;}
 function setLinkSeat(i){seatMem[G.id]=i;ls('wr-seat-'+G.id,String(i));}
-function mySeatIndex(){if(!G)return -1;if(mode==='local')return G.turn?G.turn.p:-1;if(mode==='link'){const s=linkSeat();return s==null?-1:s;}return G.players.findIndex(p=>p.seat===seatId);}
-function canAct(){if(!G||G.status!=='playing')return false;if(mode==='local')return true;if(mode==='link')return linkSeat()===G.turn.p;return G.players[G.turn.p].seat===seatId;}
+function mySeatIndex(){if(!G)return -1;if(mode==='local'){if(!G.turn)return -1;if(!isBot(G.players[G.turn.p])){lastHumanSeat=G.turn.p;return G.turn.p;}const h=G.players.findIndex((p,i)=>i===lastHumanSeat&&!isBot(p));return h>=0?h:G.players.findIndex(p=>!isBot(p));}if(mode==='link'){const s=linkSeat();return s==null?-1:s;}return G.players.findIndex(p=>p.seat===seatId);}
+function canAct(){if(!G||G.status!=='playing')return false;if(mode==='local')return !isBot(G.players[G.turn.p]);if(mode==='link')return linkSeat()===G.turn.p;return G.players[G.turn.p].seat===seatId;}
 function useGame(g){G=g;if(G){loadMap(G.map||'na');if(!G.events)G.events=[];}}
 
 /* ---------- persistence ---------- */
@@ -477,11 +536,11 @@ function render(){
   $('#sheetBody').innerHTML=mode==='lobby'?lobbyHtml():(G&&G.status==='setup')?setupHtml():G?playHtml():'<p class="status">Loading the game…</p>';
   const overlayOpen=!$('#overlay').hidden;
   if(G&&G.lastEvent&&G.lastEvent.id>lastEventSeen&&G.status!=='setup'){lastEventSeen=G.lastEvent.id;const st=EV_STYLE[G.lastEvent.type]||{};showOverlay('<h3>'+(st.icon||'')+' '+esc(st.label||'Trouble')+'</h3><p>'+esc(G.lastEvent.text)+'</p><p><button class="btn go" data-act="closeOverlay" type="button">Got it</button></p>');}
-  else if(mode==='local'&&G&&G.status==='playing'&&G.turn.n!==lastTurnSeen&&G.players.length>1&&!overlayOpen){lastTurnSeen=G.turn.n;showOverlay('<h3>'+esc(curP().name)+'’s turn</h3><p class="muted">Pass the phone, then tap to start.</p><p><button class="btn go" data-act="closeOverlay" type="button">Start turn</button></p>');}
+  else if(mode==='local'&&G&&G.status==='playing'&&G.turn.n!==lastTurnSeen&&G.players.filter(p=>!isBot(p)).length>1&&!isBot(curP())&&!overlayOpen){lastTurnSeen=G.turn.n;showOverlay('<h3>'+esc(curP().name)+'’s turn</h3><p class="muted">Pass the phone, then tap to start.</p><p><button class="btn go" data-act="closeOverlay" type="button">Start turn</button></p>');}
   if(mode==='local'&&G&&G.turn&&overlayOpen)lastTurnSeen=G.turn.n;
   if(G&&G.status==='over'&&!render.overShown&&$('#overlay').hidden){render.overShown=true;showOverlay('<h3>'+esc(G.players[G.winner].name)+' wins</h3><p class="muted">Final cash $'+G.players[G.winner].cash+'M with '+majorsConnected(G,G.winner)+' major cities linked.</p><p><button class="btn go" data-act="closeOverlay" type="button">Look at the map</button></p>');}
   if(!G||G.status!=='over')render.overShown=false;
-  placeZoom();setTimeout(placeZoom,250);
+  placeZoom();setTimeout(placeZoom,250);scheduleBot();
   if(G&&G.status!=='setup'&&!render.fitted){render.fitted=true;setTimeout(fitView,280);}
   if(mode==='lobby'||(G&&G.status==='setup'))render.fitted=false;
   document.title=(G&&G.status==='playing'&&mode!=='local'&&canAct()?'● Your turn · ':'')+'Wax & Rail';
@@ -513,21 +572,21 @@ function lobbyHtml(){
     h+='<label class="f" for="code">Got a turn link that opened somewhere else? Paste it here.</label><div class="row"><input class="t" id="code" placeholder="Paste link or code" autocomplete="off"><button class="btn" type="button" data-act="loadCode">Load</button></div>';
   }else h+='<p class="muted">Connecting…</p>';
   let localSaved=ls('wr-local');
-  h+='<h2>Same phone</h2><div class="row"><button class="btn" type="button" data-act="local">New pass-and-play game</button>'+(localSaved?'<button class="btn" type="button" data-act="localResume">Resume pass-and-play</button>':'')+'</div>';
+  h+='<h2>Same phone</h2><p class="small muted">Pass the phone around, or add computer players to play solo.</p><div class="row"><button class="btn" type="button" data-act="local">New game on this phone</button>'+(localSaved?'<button class="btn" type="button" data-act="localResume">Resume pass-and-play</button>':'')+'</div>';
   h+='<h2>How to play</h2><div class="small"><p><b>Build.</b> Tap any dot to sketch track by the cheapest route from a major city (hexagon) or your own line. Tap again to build. Clear ground $1M, mountains $2M, peaks $5M, rivers +$2M, cities $3–5M, ferries as marked. Up to $20M a turn.</p><p><b>Haul.</b> Each demand card asks for a good at a city. Tap a demand to light up where to get it (yellow) and where it goes (pink). Pick it up, deliver it, get paid, draw a new card.</p><p><b>Move.</b> Tap a highlighted dot, then tap again to go. Riding someone else’s track costs $4M per owner per turn.</p><p><b>Events.</b> New cards sometimes bring trouble: floods wash out bridges, derailments cost a load and a turn, strikes shut down pickups, blizzards slow trains, and the taxman visits.</p><p><b>Win.</b> Link the required major cities in one network and reach the cash goal.</p></div>';
   return h;
 }
 function setupHtml(){
   const L=LENGTHS[G.len];const taken=G.players.map(p=>p.color);
-  let h='<h1 class="title">'+(mode==='local'?'Pass and play':mode==='link'?'Play by text':'New game')+'</h1>'+underline;
+  let h='<h1 class="title">'+(mode==='local'?'This phone':mode==='link'?'Play by text':'New game')+'</h1>'+underline;
   h+='<h2>Map</h2><div class="seg">'+Object.entries(MAPS).map(([k,m])=>'<button class="btn" type="button" data-act="map" data-map="'+k+'" aria-pressed="'+(G.map===k)+'">'+esc(m.name)+'</button>').join('')+'</div><p class="small muted">'+esc(MAPS[G.map].blurb)+'</p>';
   h+='<h2>Game length</h2><div class="seg">'+Object.entries(LENGTHS).map(([k,l])=>'<button class="btn" type="button" data-act="len" data-len="'+k+'" aria-pressed="'+(G.len===k)+'">'+l.label+'</button>').join('')+'</div><p class="small muted">Win with $'+L.cash+'M and '+L.majors+' of 8 major cities linked.</p>';
   h+='<h2>Events</h2><div class="seg"><button class="btn" type="button" data-act="ev" data-on="1" aria-pressed="'+!!G.eventsOn+'">On</button><button class="btn" type="button" data-act="ev" data-on="0" aria-pressed="'+!G.eventsOn+'">Off</button></div>';
-  h+='<h2>Players</h2><div class="box">'+(G.players.length?G.players.map((p,i)=>'<div class="row" style="padding:4px 0"><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:'+p.color+'"></span><b>'+esc(p.name)+'</b>'+(mode==='link'&&i===0?' <span class="small muted">(you)</span>':'')+'</div>').join(''):'<p class="muted">Nobody’s joined yet.</p>')+'</div>';
+  h+='<h2>Players</h2><div class="box">'+(G.players.length?G.players.map((p,i)=>'<div class="row" style="padding:4px 0"><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:'+p.color+'"></span><b>'+esc(p.name)+'</b>'+(isBot(p)?' <span class="small muted">(computer)</span>':'')+(mode==='link'&&i===0?' <span class="small muted">(you)</span>':'')+'</div>').join(''):'<p class="muted">Nobody’s joined yet.</p>')+'</div>';
   const mine=mode==='online'&&G.players.some(p=>p.seat===seatId);
   if((mode!=='online'||!mine)&&G.players.length<4){
     const free=COLORS.find(c=>!taken.includes(c[1]));
-    h+='<h2>'+(mode==='online'?'Join this game':mode==='link'&&!G.players.length?'Add yourself first':'Add a player')+'</h2><label class="f" for="nm">Name</label><input class="t" id="nm" maxlength="14" placeholder="'+(G.players.length?'Dad':'Aaron')+'" autocomplete="off"><label class="f">Crayon</label><div class="swatches">'+COLORS.map(c=>'<button type="button" class="sw" data-color="'+c[1]+'" aria-label="'+c[0]+'" aria-pressed="'+(free&&free[1]===c[1])+'" style="background:'+c[1]+'"'+(taken.includes(c[1])?' disabled':'')+'></button>').join('')+'</div><p style="margin-top:12px"><button class="btn go" type="button" data-act="join">'+(mode==='online'?'Join game':'Add player')+'</button></p>';
+    h+='<h2>'+(mode==='online'?'Join this game':mode==='link'&&!G.players.length?'Add yourself first':'Add a player')+'</h2><label class="f" for="nm">Name</label><input class="t" id="nm" maxlength="14" placeholder="'+(G.players.length?'Dad':'Aaron')+'" autocomplete="off"><label class="f">Crayon</label><div class="swatches">'+COLORS.map(c=>'<button type="button" class="sw" data-color="'+c[1]+'" aria-label="'+c[0]+'" aria-pressed="'+(free&&free[1]===c[1])+'" style="background:'+c[1]+'"'+(taken.includes(c[1])?' disabled':'')+'></button>').join('')+'</div><p style="margin-top:12px" class="row"><button class="btn go" type="button" data-act="join">'+(mode==='online'?'Join game':'Add player')+'</button>'+(mode==='local'?'<button class="btn" type="button" data-act="addBot">Add computer player</button>':'')+'</p>';
   }
   if(mode==='online'&&backend==='fire')h+='<div class="box"><p><b>Invite the other players</b></p><p class="small muted">Send this link once. After they join, the game lives on their phone and updates live.</p><div class="row"><button class="btn go" type="button" data-act="invite">Send invite</button><button class="btn" type="button" data-act="copyInvite">Copy link</button></div></div>';
   else if(mode==='online'&&mine)h+='<p class="small muted">Send the other players this page’s link. They open it, tap this game, and join.</p>';
@@ -541,7 +600,7 @@ function playHtml(){
   let h='';
   if(G.status==='over')h+='<div class="status"><span class="dot" style="background:'+G.players[G.winner].color+'"></span>'+esc(G.players[G.winner].name)+' won the game</div><p class="row"><button class="btn" type="button" data-act="lobby">Back to games</button>'+(mode==='link'?'<button class="btn" type="button" data-act="share">Send final map</button>':'')+'</p>';
   else{const ph=t.kind==='init'?'Building ('+(t.seqIdx<G.players.length?'first':'second')+' round)':t.phase==='move'?'Moving':'Building';
-    h+='<div class="status"><span class="dot" style="background:'+cp.color+'"></span>'+(me?(mode==='local'?esc(cp.name)+': ':'Your turn: ')+ph:'Waiting for '+esc(cp.name))+'</div>';
+    h+='<div class="status"><span class="dot" style="background:'+cp.color+'"></span>'+(me?(mode==='local'?esc(cp.name)+': ':'Your turn: ')+ph:isBot(cp)?esc(cp.name)+' (computer) is taking its turn…':'Waiting for '+esc(cp.name))+'</div>';
     if(!me&&mode==='link'&&vi>=0)h+='<p class="row"><button class="btn go" type="button" data-act="share">Send turn link again</button><button class="btn" type="button" data-act="copyLink">Copy link</button></p>';
     if(mode==='online'&&backend==='fire'&&vi<0)h+='<div class="box"><p><b>Playing on a new phone?</b> Tap your name to take your seat.</p><div class="row">'+G.players.map((p,i)=>'<button class="btn" type="button" data-act="claim" data-i="'+i+'"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'+p.color+';margin-right:6px;vertical-align:-1px"></span>'+esc(p.name)+'</button>').join('')+'</div></div>';
     if(!me&&mode==='link'&&vi<0)h+='<p><button class="btn" type="button" data-act="pickSeat">Choose who you are</button></p>';}
@@ -576,7 +635,7 @@ function regenCards(){for(const p of G.players)p.cards=[makeCard(),makeCard(),ma
 document.addEventListener('click',async e=>{
   const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
   switch(a){
-    case 'closeOverlay':$('#overlay').hidden=true;render();break;
+    case 'closeOverlay':$('#overlay').hidden=true;render();scheduleBot();break;
     case 'open':openOnline(b.dataset.id);break;
     case 'create':createOnline('short');break;
     case 'local':startLocal(false);break;
@@ -590,6 +649,7 @@ document.addEventListener('click',async e=>{
     case 'share':shareTurn();break;
     case 'copyLink':copyTurn('link');break;
     case 'lobby':goLobby();break;
+    case 'addBot':if(G&&G.status==='setup'&&G.players.length<4){const col=COLORS.find(c=>!G.players.some(p=>p.color===c[1]));const nm=BOT_NAMES.find(n=>!G.players.some(p=>p.name===n))||'Bot';addPlayer(G,'bot-'+G.players.length,nm,col[1]);G.players[G.players.length-1].bot={};commit();}break;
     case 'invite':shareInvite();break;
     case 'copyInvite':copyText(inviteLink(),'Invite link copied.');break;
     case 'delFire':if(confirm('Remove this game from this phone? You can rejoin with the invite link.')){fireIndexDel(b.dataset.id);render();}break;
