@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wax & Rail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+  --water:#2B4C69;
+  --sheet:#F3F5F1;
+  --sheet-2:#E4E9E3;
+  --text:#1C2530;
+  --muted:#59646F;
+  --line:#CBD3CB;
+  --signal:#F2B705;
+  --signal-ink:#1C2530;
+  --src:#F2B705;
+  --dest:#FF2E88;
+  --danger:#B3261E;
+  --shadow:0 -6px 24px rgba(10,20,30,.28);
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --display:"Alfa Slab One",Rockwell,"Roboto Slab",Georgia,serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --water:#1A3247;
+    --sheet:#17212B;
+    --sheet-2:#22303C;
+    --text:#E7ECEF;
+    --muted:#9AA7B2;
+    --line:#2F3E4B;
+    --shadow:0 -6px 24px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --water:#1A3247;--sheet:#17212B;--sheet-2:#22303C;--text:#E7ECEF;--muted:#9AA7B2;--line:#2F3E4B;--shadow:0 -6px 24px rgba(0,0,0,.5);
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--water);color:var(--text);font-family:var(--body);font-size:16px;line-height:1.4;overflow:hidden;-webkit-tap-highlight-color:transparent}
+#app{position:fixed;inset:0}
+canvas#map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;cursor:grab}
+#top{position:absolute;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top,0px) + 8px) 10px 8px;display:flex;gap:8px;align-items:center;background:linear-gradient(var(--water),color-mix(in srgb,var(--water) 70%,transparent));z-index:5}
+#brand{font-family:var(--display);color:#F3F5F1;font-size:20px;letter-spacing:.5px;white-space:nowrap}
+#chips{display:flex;gap:6px;overflow-x:auto;flex:1;scrollbar-width:none}
+#chips::-webkit-scrollbar{display:none}
+.chip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);color:#F3F5F1;border-radius:999px;padding:4px 10px 4px 6px;font-size:13px;white-space:nowrap;border:2px solid transparent}
+.chip.now{border-color:var(--signal)}
+.chip .dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff}
+.chip b{font-weight:700}
+#menuBtn{background:rgba(255,255,255,.14);color:#F3F5F1;border:0;border-radius:10px;padding:8px 12px;font:700 14px var(--body)}
+#sheet{position:absolute;left:0;right:0;bottom:0;max-height:44%;display:flex;flex-direction:column;background:var(--sheet);border-radius:18px 18px 0 0;box-shadow:var(--shadow);z-index:6;padding-bottom:env(safe-area-inset-bottom,0px);transition:max-height .22s ease}
+#sheet.collapsed{max-height:calc(64px + env(safe-area-inset-bottom,0px))}
+#sheet.full{max-height:100%;top:0;border-radius:0;padding-top:env(safe-area-inset-top,0px)}
+#grab{border:0;background:none;padding:8px 0 2px;width:100%;cursor:pointer}
+#grab span{display:block;margin:0 auto;width:44px;height:5px;border-radius:3px;background:var(--line)}
+#sheetBody{overflow-y:auto;padding:4px 16px 16px;-webkit-overflow-scrolling:touch}
+#sheet.full #grab{display:none}
+h1.title{font-family:var(--display);font-weight:400;font-size:42px;line-height:1;margin:18px 0 6px;letter-spacing:.5px}
+.crayon-under{display:block;width:220px;height:14px;margin-bottom:14px}
+h2{font-size:15px;margin:18px 0 8px;color:var(--muted);font-weight:700}
+p{margin:6px 0}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.status{font-weight:700;font-size:17px;display:flex;align-items:center;gap:8px;min-height:30px}
+.status .dot{width:16px;height:16px;border-radius:50%;flex:none;border:2px solid var(--sheet)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button.btn{font:700 15px var(--body);border-radius:12px;border:2px solid var(--line);background:var(--sheet);color:var(--text);padding:10px 14px;min-height:44px;cursor:pointer}
+button.btn.go{background:var(--signal);border-color:var(--signal);color:var(--signal-ink)}
+button.btn.warn{color:var(--danger)}
+button.btn:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+.box{background:var(--sheet-2);border-radius:14px;padding:12px;margin:10px 0}
+.box.hl{outline:3px solid var(--signal)}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:420px){.cards{grid-template-columns:1fr}}
+.card{background:var(--sheet-2);border-radius:12px;padding:6px;border:2px solid var(--line)}
+.dem{display:flex;justify-content:space-between;gap:6px;width:100%;text-align:left;border:0;background:none;color:var(--text);font:400 14px var(--body);padding:7px 6px;border-radius:8px;cursor:pointer}
+.dem+.dem{border-top:1px dashed var(--line)}
+.dem.sel{background:var(--signal);color:var(--signal-ink)}
+.dem .pay{font-weight:700;white-space:nowrap}
+.dem .ok{font-weight:700}
+.loads{display:flex;gap:6px;flex-wrap:wrap}
+.load{display:inline-flex;align-items:center;gap:6px;background:var(--sheet);border:2px solid var(--line);border-radius:999px;padding:4px 6px 4px 12px;font-weight:700;font-size:14px}
+.load button{border:0;background:var(--sheet-2);color:var(--text);border-radius:50%;width:26px;height:26px;font-weight:700;cursor:pointer}
+.empty-load{color:var(--muted);font-size:14px}
+.log{list-style:none;padding:0;margin:0;font-size:13px;color:var(--muted)}
+.log li{padding:3px 0}
+.game{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.game:first-child{border-top:0}
+label.f{display:block;font-size:14px;font-weight:700;margin:10px 0 4px}
+input.t{font:400 16px var(--body);width:100%;max-width:320px;padding:10px 12px;border-radius:10px;border:2px solid var(--line);background:var(--sheet);color:var(--text)}
+.swatches{display:flex;gap:10px}
+.sw{width:40px;height:40px;border-radius:50%;border:3px solid var(--sheet);box-shadow:0 0 0 2px var(--line);cursor:pointer}
+.sw[aria-pressed="true"]{box-shadow:0 0 0 3px var(--text)}
+.sw:disabled{opacity:.2;cursor:default}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button[aria-pressed="true"]{background:var(--signal);border-color:var(--signal);color:var(--signal-ink)}
+.goal{font-size:14px}
+#toast{position:absolute;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 58px);background:var(--text);color:var(--sheet);padding:10px 16px;border-radius:12px;font-weight:700;font-size:14px;z-index:9;max-width:90%;text-align:center;opacity:0;pointer-events:none;transition:opacity .2s}
+#toast.on{opacity:1}
+#overlay{position:absolute;inset:0;background:rgba(15,25,35,.78);z-index:8;display:flex;align-items:center;justify-content:center;padding:24px}
+#overlay[hidden]{display:none}
+#overlay .inner{background:var(--sheet);border-radius:18px;padding:24px;max-width:360px;width:100%;text-align:center}
+#overlay h3{font-family:var(--display);font-weight:400;font-size:28px;margin:0 0 8px}
+.zoom{position:absolute;right:10px;top:70px;display:flex;flex-direction:column;gap:6px;z-index:4}
+.zoom button{width:42px;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.9);color:#1C2530;font:700 20px var(--body);box-shadow:0 2px 6px rgba(0,0,0,.25)}
+@media (prefers-reduced-motion:reduce){#sheet{transition:none}#toast{transition:none}}
+
+.legend{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--muted)}
+.legend .key{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px}
+.log.ev{color:var(--text)}
+.log.ev li{padding:6px 0;border-top:1px dashed var(--line)}
+.log.ev li:first-child{border-top:0}
+.dem.sel{background:var(--dest);color:#fff}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="map" aria-label="Rail map of North America"></canvas>
+  <div id="top">
+    <div id="brand">Wax & Rail</div>
+    <div id="chips"></div>
+    <button id="menuBtn" type="button">Games</button>
+  </div>
+  <div class="zoom" id="zoom"><button type="button" data-z="1" aria-label="Zoom in">+</button><button type="button" data-z="-1" aria-label="Zoom out">−</button><button type="button" data-z="0" aria-label="Show whole map">⤢</button></div>
+  <section id="sheet"><button id="grab" type="button" aria-label="Expand or collapse panel"><span></span></button><div id="sheetBody"></div></section>
+  <div id="toast" role="status"></div>
+  <div id="overlay" hidden><div class="inner" id="overlayInner"></div></div>
+</div>
+<script>
+'use strict';
+/* ============================================================
+   LIVE PLAY SETUP: paste your Firebase config between the braces.
+   Example:
+   const FIREBASE_CONFIG = {
+     apiKey: "AIza...",
+     authDomain: "wax-and-rail.firebaseapp.com",
+     projectId: "wax-and-rail",
+     storageBucket: "wax-and-rail.appspot.com",
+     messagingSenderId: "1234567890",
+     appId: "1:1234567890:web:abc123"
+   };
+   Leave it as null to use play-by-text instead.
+   ============================================================ */
+const FIREBASE_CONFIG = null;
+
+/* ================= Map definitions ================= */
+const MAPS={
+ na:{name:'North America',blurb:'Coast to coast. The classic sprawl.',ext:{lonMin:-127.5,lonMax:-64.5,latMin:24,latMax:52.5},refLat:38,sp:0.95,
+  land:[[[-127.5,52.5],[-127.5,51.2],[-125.5,50.2],[-124.7,48.4],[-124.6,47.5],[-124.1,46.6],[-124,44.5],[-124.5,42.8],[-124.2,41],[-123.8,39.8],[-122.9,38.2],[-122.5,37.5],[-121.9,36.6],[-121.3,35.6],[-120.6,34.6],[-119.5,34.4],[-118.5,34],[-117.9,33.6],[-117.2,32.7],[-116.6,31.6],[-116,30.4],[-115.2,29.6],[-114.2,28.5],[-114,27.6],[-112.8,26.6],[-112.2,25.4],[-112.1,24],[-110.4,24],[-111.2,25.8],[-112.1,27.3],[-112.8,28.6],[-113.6,29.8],[-114.6,31],[-114.8,31.8],[-113.4,31.3],[-112.6,30.6],[-112.1,29.4],[-111.2,28.1],[-110.4,27.2],[-109.4,26.2],[-108.8,25.4],[-108,24.6],[-107.4,24],[-97.8,24],[-97.6,25],[-97.2,26],[-97.4,27.4],[-97,28.1],[-95.3,28.9],[-94,29.6],[-92.3,29.6],[-91.2,29.2],[-90,29],[-89.2,29.3],[-89.6,30.2],[-88.5,30.4],[-87.2,30.3],[-86,30.3],[-85.2,29.7],[-84.3,30],[-83.4,29.5],[-82.7,28],[-82.2,26.8],[-81.4,25.8],[-80.9,25.2],[-80.3,25.4],[-80,26.7],[-80.5,28.3],[-81.2,29.8],[-81.4,31],[-80.7,32.2],[-79.4,33.2],[-78,33.9],[-76.6,34.6],[-75.5,35.4],[-75.8,36.6],[-75.5,37.6],[-75.1,38.6],[-74.9,39],[-74.2,39.6],[-74,40.4],[-73.9,40.55],[-72.5,40.9],[-71.9,41.1],[-71,41.5],[-70,41.6],[-70.5,42.3],[-70.8,42.6],[-70.6,43.1],[-70.2,43.7],[-69,44.1],[-67.8,44.5],[-67,44.8],[-66,45.2],[-66.2,44.2],[-65,43.6],[-64.5,43.9],[-64.5,52.5]]],
+  lakes:[[[-92.1,46.7],[-90,46.6],[-87.5,46.5],[-85,46.5],[-84.5,46.5],[-84.8,47.5],[-86,48.7],[-88.3,48.8],[-89.5,48],[-91,47.3]],[[-87.8,41.7],[-87.2,41.6],[-86.6,42.2],[-86.2,43.5],[-86.5,44.8],[-85.4,45.8],[-84.8,45.8],[-86,46],[-87.6,45.2],[-88,44.5],[-87.6,43],[-87.9,42.3]],[[-84.7,45.9],[-83.5,46.1],[-81.5,46],[-80.2,45],[-80.6,44.5],[-81.7,43.3],[-82.4,43],[-83.3,44],[-83.4,45],[-84.5,45.7]],[[-83.4,41.7],[-82.5,41.4],[-81.5,41.5],[-80,42.1],[-78.9,42.8],[-79.8,42.9],[-81.5,42.6],[-83,42.1]],[[-79.8,43.3],[-79,43.2],[-77.5,43.3],[-76.3,43.5],[-76.2,44.1],[-77.5,44],[-79.2,43.55]],[[-80.6,52.5],[-79.2,52.5],[-78.9,51.5],[-79.7,51.2],[-80.5,51.4]],[[-70.2,47.3],[-67.5,49.3],[-64.5,49.6],[-64.5,47.9],[-66.4,48.9],[-69,48]]],
+  mount:[[[-116,49],[-112.5,49],[-108.5,45],[-104.8,41],[-104.8,35.5],[-107,34.5],[-109.5,36.5],[-111.5,40],[-113.5,44],[-116.5,46.5]],[[-120,52.5],[-116.5,52.5],[-113.5,49],[-116.5,49]],[[-127.2,52.5],[-124,52.5],[-121.6,49.4],[-123,49.4]],[[-122.3,49],[-120.5,49],[-120.8,45],[-121.5,42],[-122.6,42],[-122.4,45.5]],[[-121.3,40.5],[-119.8,40.5],[-117.8,35.6],[-118.8,35]],[[-86,34],[-84,34],[-80.5,37],[-77.8,39.5],[-75.5,41.5],[-72.5,44],[-71.5,45],[-73,45],[-74.5,43],[-77.5,41],[-79.5,39],[-82,37.3]],[[-108.6,29.5],[-106.5,29.5],[-104.2,24],[-106.8,24]],[[-101.2,24],[-99.4,24],[-99.9,26.4],[-101.6,26.4]]],
+  alpine:[[[-108,37.2],[-105.4,37.2],[-105.4,40.8],[-108,40.8]],[[-120.6,39.6],[-119.6,39.6],[-118,36.2],[-118.9,35.8]],[[-111,42.6],[-109.2,42.6],[-109.2,44.4],[-111,44.4]],[[-118.5,52.5],[-117,52.5],[-115.6,50.6],[-117.2,50.6]]],
+  rivers:[['Mississippi',[[-95.2,47.2],[-93.3,45],[-91.2,43.5],[-91,41.5],[-91.4,40],[-90.2,38.6],[-89.2,37],[-90,35],[-91,33.5],[-91.4,31.5],[-90.1,30],[-89.3,29.2]]],['Missouri',[[-111.5,47.5],[-108,47.7],[-104,48],[-101,47.3],[-100.4,44.4],[-97.3,42.8],[-96,41.3],[-95.8,39.8],[-94.6,39.1],[-92.2,38.6],[-90.2,38.8]]],['Ohio',[[-80,40.4],[-81.5,39.3],[-82.7,38.6],[-84.5,39.1],[-85.8,38.2],[-87.6,37.9],[-89.1,37]]],['Rio Grande',[[-106.7,37.7],[-106.7,35],[-106.9,32.2],[-106.4,31.8],[-104.5,29.6],[-103,29],[-101,29.6],[-99.5,27.5],[-97.2,25.9]]],['Columbia',[[-117.5,49],[-118.5,47],[-119.3,46.2],[-121,45.6],[-123,46.2],[-124,46.2]]],['St. Lawrence',[[-76.3,44.2],[-75,45],[-73.5,45.5],[-71.2,46.8],[-70.2,47.3]]],['Arkansas',[[-100.5,37.8],[-98,38.3],[-96.5,37],[-95,35.5],[-92.3,34.7],[-91.2,33.9]]]],
+  cities:[['Seattle',-122.33,47.61,3],['Los Angeles',-118.24,34.05,3],['Denver',-104.99,39.74,3],['Dallas',-96.8,32.78,3],['Chicago',-87.63,41.88,3],['Atlanta',-84.39,33.75,3],['New York',-74,40.71,3],['Toronto',-79.38,43.7,3],
+   ['Vancouver',-123.12,49.28,2],['Portland',-122.68,45.52,2],['San Francisco',-122.42,37.77,2],['Las Vegas',-115.14,36.17,2],['Phoenix',-112.07,33.45,2],['Salt Lake City',-111.89,40.76,2],['Calgary',-114.07,51.05,2],['Winnipeg',-97.14,49.9,2],['Minneapolis',-93.27,44.98,2],['Kansas City',-94.58,39.1,2],['St. Louis',-90.2,38.63,2],['Houston',-95.37,29.76,2],['New Orleans',-90.07,29.95,2],['Memphis',-90.05,35.15,2],['Detroit',-83.05,42.33,2],['Pittsburgh',-79.99,40.44,2],['Washington',-77.04,38.9,2],['Boston',-71.06,42.36,2],['Montreal',-73.57,45.5,2],['Miami',-80.19,25.76,2],['Monterrey',-100.31,25.69,2],['El Paso',-106.49,31.76,2],
+   ['San Diego',-117.16,32.72,1],['Sacramento',-121.49,38.58,1],['Reno',-119.81,39.53,1],['Boise',-116.2,43.62,1],['Spokane',-117.43,47.66,1],['Helena',-112.04,46.59,1],['Billings',-108.5,45.78,1],['Regina',-104.62,50.45,1],['Bismarck',-100.78,46.81,1],['Fargo',-96.79,46.88,1],['Rapid City',-103.23,44.08,1],['Cheyenne',-104.82,41.14,1],['Albuquerque',-106.65,35.08,1],['Tucson',-110.97,32.22,1],['Hermosillo',-110.96,29.07,1],['Chihuahua',-106.09,28.63,1],['San Antonio',-98.49,29.42,1],['Oklahoma City',-97.52,35.47,1],['Tulsa',-95.99,36.15,1],['Wichita',-97.34,37.69,1],['Omaha',-95.93,41.26,1],['Des Moines',-93.61,41.59,1],['Duluth',-92.1,46.79,1],['Thunder Bay',-89.25,48.38,1],['Milwaukee',-87.91,43.04,1],['Indianapolis',-86.16,39.77,1],['Louisville',-85.76,38.25,1],['Cincinnati',-84.51,39.1,1],['Cleveland',-81.69,41.5,1],['Buffalo',-78.88,42.89,1],['Ottawa',-75.7,45.42,1],['Quebec',-71.21,46.81,1],['Little Rock',-92.29,34.75,1],['Birmingham',-86.8,33.52,1],['Nashville',-86.78,36.16,1],['Charlotte',-80.84,35.23,1],['Richmond',-77.44,37.54,1],['Savannah',-81.1,32.08,1],['Jacksonville',-81.66,30.33,1],['Tampa',-82.46,27.95,1],['Mobile',-88.04,30.69,1],['Corpus Christi',-97.4,27.8,1],['Durant',-96.39,33.99,1],['Fayetteville',-94.16,36.06,1]],
+  goods:{Coal:['Pittsburgh','Billings','Birmingham','Cheyenne'],Oil:['Houston','Tulsa','Calgary','Corpus Christi'],Steel:['Cleveland','Pittsburgh','Monterrey'],Cars:['Detroit','Toronto'],Grain:['Wichita','Fargo','Regina','Winnipeg'],Cattle:['San Antonio','Omaha','Rapid City','Calgary'],Lumber:['Portland','Spokane','Vancouver','Duluth'],Copper:['Tucson','Helena','Hermosillo'],Fruit:['Sacramento','Tampa','Miami'],Fish:['Boston','Seattle','New Orleans'],Cotton:['Memphis','Little Rock','Dallas'],Machinery:['Chicago','Milwaukee','Cincinnati'],Tobacco:['Richmond','Louisville','Charlotte'],'Iron ore':['Duluth','Thunder Bay'],Paper:['Quebec','Ottawa','Thunder Bay'],Corn:['Des Moines','Indianapolis','Omaha'],Potatoes:['Boise','Spokane'],Silver:['Chihuahua','Reno'],Wine:['San Francisco'],Imports:['New York','Los Angeles'],Peanuts:['Durant','Savannah'],Poultry:['Fayetteville','Atlanta'],Textiles:['Charlotte','Atlanta'],Aircraft:['Seattle','Wichita'],Music:['Nashville','Memphis'],Sugar:['New Orleans','Miami']},
+  ferries:[]},
+ eu:{name:'Europe',blurb:'Dense cities, the Alps, and ferries to the islands.',ext:{lonMin:-11,lonMax:32,latMin:35.5,latMax:61},refLat:48,sp:0.72,
+  land:[
+   [[-9.3,43.2],[-8.9,42],[-8.8,40.5],[-9.4,38.8],[-8.8,37.9],[-8.9,37],[-7.4,37.2],[-6.3,36.6],[-5.6,36],[-4.4,36.7],[-2.1,36.7],[-0.7,37.6],[0.2,38.8],[-0.3,39.5],[0.9,40.8],[2.2,41.4],[3.2,42],[3.1,43.1],[4.6,43.4],[6,43.1],[7.5,43.8],[8.8,44.4],[10.2,43.9],[10.5,42.9],[12.2,41.7],[13.9,40.9],[15.6,40.1],[15.7,38.2],[16.6,38.4],[17.1,39.4],[16.6,40.4],[18.5,40.1],[18.4,40.6],[16.2,41.4],[14.2,42.1],[13.6,43.5],[12.4,44.4],[12.3,45.3],[13.7,45.7],[13.6,45.1],[14.5,45.3],[15.2,44.3],[16.4,43.5],[17.6,43],[18.6,42.4],[19.4,41.8],[19.4,40.4],[20.2,39.6],[21.1,38.3],[21.7,36.8],[22.5,36.4],[23.2,37],[23,38.2],[22.9,39.4],[22.9,40.5],[23.8,40.8],[25,40.9],[26.2,40.6],[26.2,40],[26.5,39],[27,37.9],[27.3,37],[28.2,36.7],[29.6,36.2],[32,36.2],[32,41.6],[31,41.2],[29.2,41.2],[28.1,41.6],[27.9,42.7],[28.6,43.6],[29.7,45.2],[30.8,46.4],[31.7,46.6],[32,46.6],[32,61],[21.5,61],[21.4,60.5],[22.9,59.9],[24.9,60.2],[27,60.5],[28.9,60.6],[30.2,59.9],[28,59.5],[24.7,59.5],[23.4,59],[23.5,58.3],[21.4,57.3],[21,56.5],[21.1,55.6],[20.6,54.9],[19.6,54.4],[18.6,54.6],[17,54.7],[14.8,54],[13.4,54.6],[12.3,54.2],[11,54],[10.9,54.5],[10,54.8],[10.3,55.5],[10.6,56.6],[10.6,57.7],[9.4,57.1],[8.6,57.1],[8.1,56.5],[8.2,55.5],[8.7,54.9],[8.9,54],[8,53.6],[7,53.4],[6,53.4],[4.8,52.9],[4.4,52.1],[3.6,51.4],[2.5,51.1],[1.6,50.2],[0.2,49.7],[-1.3,49.6],[-1.9,49.7],[-1.4,48.7],[-3,48.8],[-4.6,48.5],[-4.4,47.9],[-2.5,47.3],[-1.2,46.2],[-1.2,44.7],[-1.5,43.5],[-1.8,43.4],[-3.8,43.5],[-5.8,43.6],[-8,43.7]],
+   [[5,61],[4.9,60.2],[5.2,59.2],[5.6,58.6],[6.6,58.1],[8,58.1],[9.4,58.8],[10.5,59.3],[11.1,59],[11.6,58.1],[12,57.3],[12.6,56.3],[12.9,55.4],[14.2,55.4],[14.6,56.1],[16,56.2],[16.5,57],[16.6,58.2],[16.8,58.7],[18.2,59.3],[18.6,60.2],[17.4,60.7],[17.2,61]],
+   [[10.4,55.6],[10.5,55.1],[11,55],[11.9,54.7],[12.6,55.2],[12.6,55.7],[12.3,56.1],[11,55.9]],
+   [[-5.7,50],[-3.5,50.4],[-1,50.7],[1.4,51.1],[1.7,52.6],[0.3,53.1],[0.1,53.6],[-0.5,54.5],[-1.6,55.6],[-2.1,56],[-2.6,56.3],[-1.8,57.5],[-3.6,57.7],[-3.1,58.6],[-5,58.6],[-5.7,57.4],[-5.6,56.3],[-5,55.8],[-4.9,54.9],[-3.4,54.9],[-3,53.9],[-3,53.3],[-4.5,53.4],[-4.7,52.8],[-4,52.3],[-5.2,51.7],[-3.2,51.4],[-4.2,51.2]],
+   [[-6,52.2],[-6.2,53.3],[-6,54],[-5.5,54.6],[-6.2,55.2],[-7.6,55.3],[-8.5,54.9],[-8.6,54.3],[-10.1,54.2],[-9.6,53.2],[-10.2,52.2],[-9.7,51.5],[-8.4,51.7],[-7,52.1]],
+   [[12.4,38],[13.3,38.2],[15.6,38.3],[15.1,36.7],[14.3,37],[12.5,37.6]]],
+  lakes:[[[30.6,61],[32,61],[32,60.4],[31.4,60.1],[30.8,60.4]],[[12.4,58.5],[14,58.5],[14,59.3],[12.6,59.3]]],
+  mount:[[[5.5,43.8],[8,43.9],[9,45.4],[12,45.7],[16,46.3],[16.3,47.7],[12.5,48],[9.5,47.8],[6.5,47.2],[5.6,45.8]],[[-2.2,42.6],[3.2,42.1],[3.2,43],[-1.6,43.5]],[[8.2,44.5],[10.5,44.2],[13,43.5],[15.6,41.5],[16.4,39.6],[16,38.3],[15.3,39.3],[14.2,41.3],[12.6,42.8],[10.2,43.8],[8.2,44]],[[17.5,48.8],[19.5,49.6],[22.5,49.2],[24.5,48],[26.2,47.4],[26.5,45.6],[24.5,45.2],[22.5,44.7],[22.2,45.6],[24.8,46],[25.2,47],[22.8,48.2],[19.8,48.6],[17.8,48.4]],[[14.5,45.6],[19,44.5],[21.5,42.5],[23.5,42.5],[22.5,39.5],[21,39.4],[19.5,41.5],[17,43.3],[15,44.6]],[[5.2,61],[11.8,61],[9,59.5],[6.5,58.5],[5.3,59]],[[-6.5,40.6],[-3,41.2],[-1.5,40.6],[-4.5,40],[-6.8,40.2]],[[-7.5,43.1],[-3.5,43.1],[-3.5,42.7],[-7.5,42.7]],[[2,44.5],[4.2,44.5],[4,46],[2.5,46]],[[-5.7,56.5],[-3,56.6],[-3.2,57.8],[-5.5,58.3]],[[-4.3,36.9],[-2.4,36.9],[-2.4,37.4],[-4.3,37.4]]],
+  alpine:[[[6,44.2],[7.5,44],[8.5,45.8],[10.5,46.2],[13.5,46.4],[15.5,47],[14,47.8],[11,47.5],[9.5,47.3],[7,46.6],[6.2,45.8]],[[-1.2,42.7],[2.5,42.4],[2.5,42.8],[-1,43.1]],[[6.5,61],[9.5,61],[8.5,60],[7,60]]],
+  rivers:[['Rhine',[[8.6,47.6],[7.6,47.6],[7.8,48.6],[8.4,49.3],[8.3,50],[7.6,50.4],[6.9,51],[6.6,51.8],[6,51.9],[5,51.9],[4.2,51.9]]],['Danube',[[8.2,48],[10,48.4],[12.1,49],[13.5,48.6],[16.4,48.2],[17.2,48],[18.9,47.8],[18.9,46.5],[19,45.3],[20.4,44.8],[22.5,44.6],[25,43.7],[27.5,44.1],[28.2,45.4],[29.6,45.2]]],['Rhône',[[6.2,46.2],[4.8,45.8],[4.8,44.5],[4.6,43.6]]],['Loire',[[4,46],[2.8,47.3],[1.2,47.4],[-0.6,47.4],[-2.2,47.3]]],['Elbe',[[15,50.5],[14.2,50.9],[12.7,51.8],[11.7,52.9],[10,53.5],[8.9,53.9]]],['Vistula',[[19,49.8],[20,50.1],[21.7,50.9],[21,52.2],[19,52.7],[18.8,54.3]]],['Po',[[7.6,45],[9,45.1],[11,45],[12.4,45]]],['Seine',[[4.5,48.4],[2.4,48.8],[1,49.3],[0.2,49.5]]],['Ebro',[[-3.8,43],[-1.6,42],[0.8,40.7]]],['Oder',[[18.2,49.8],[17,51.1],[15,51.8],[14.6,52.5],[14.4,53.4]]],['Tagus',[[-1.5,40.5],[-3.7,40],[-6,39.7],[-9.1,38.7]]],['Dnieper',[[30.4,52],[30.5,50.5],[31.6,49.5],[32,49.2]]]],
+  cities:[['London',-0.13,51.51,3],['Paris',2.35,48.86,3],['Berlin',13.4,52.52,3],['Madrid',-3.7,40.42,3],['Rome',12.5,41.9,3],['Vienna',16.37,48.21,3],['Milan',9.19,45.46,3],['Warsaw',21.01,52.23,3],
+   ['Lisbon',-9.14,38.72,2],['Barcelona',2.17,41.39,2],['Lyon',4.84,45.76,2],['Marseille',5.37,43.3,2],['Bordeaux',-0.58,44.84,2],['Brussels',4.35,50.85,2],['Amsterdam',4.9,52.37,2],['Hamburg',9.99,53.55,2],['Munich',11.58,48.14,2],['Frankfurt',8.68,50.11,2],['Zurich',8.54,47.37,2],['Prague',14.42,50.08,2],['Budapest',19.04,47.5,2],['Naples',14.27,40.85,2],['Copenhagen',12.57,55.68,2],['Stockholm',18.07,59.33,2],['Oslo',10.75,59.91,2],['Dublin',-6.26,53.35,2],['Manchester',-2.24,53.48,2],['Glasgow',-4.25,55.86,2],['Athens',23.73,37.98,2],['Istanbul',28.98,41.01,2],['Bucharest',26.1,44.43,2],['Kyiv',30.52,50.45,2],['Helsinki',24.94,60.17,2],['St. Petersburg',30.31,59.94,2],['Belgrade',20.46,44.79,2],['Riga',24.1,56.95,2],
+   ['Porto',-8.61,41.15,1],['Seville',-5.98,37.39,1],['Valencia',-0.38,39.47,1],['Bilbao',-2.93,43.26,1],['Toulouse',1.44,43.6,1],['Nantes',-1.55,47.22,1],['Le Havre',0.1,49.49,1],['Calais',1.86,50.95,1],['Lille',3.06,50.63,1],['Strasbourg',7.75,48.57,1],['Geneva',6.14,46.2,1],['Turin',7.69,45.07,1],['Genoa',8.93,44.41,1],['Venice',12.32,45.44,1],['Florence',11.25,43.77,1],['Bari',16.87,41.12,1],['Palermo',13.36,38.12,1],['Cologne',6.96,50.94,1],['Essen',7.01,51.46,1],['Bremen',8.8,53.08,1],['Stuttgart',9.18,48.78,1],['Leipzig',12.37,51.34,1],['Gdansk',18.65,54.35,1],['Krakow',19.94,50.06,1],['Wroclaw',17.04,51.11,1],['Lviv',24.03,49.84,1],['Odesa',30.72,46.48,1],['Sofia',23.32,42.7,1],['Thessaloniki',22.94,40.64,1],['Zagreb',15.98,45.81,1],['Sarajevo',18.41,43.86,1],['Bratislava',17.11,48.15,1],['Gothenburg',11.97,57.71,1],['Malmö',13,55.6,1],['Bergen',5.32,60.39,1],['Aarhus',10.2,56.16,1],['Kolding',9.47,55.49,1],['Odense',10.39,55.4,1],['Cork',-8.47,51.9,1],['Belfast',-5.93,54.6,1],['Edinburgh',-3.19,55.95,1],['Birmingham',-1.9,52.48,1],['Cardiff',-3.18,51.48,1],['Dover',1.31,51.13,1],['Harwich',1.29,51.94,1],['Holyhead',-4.63,53.31,1],['Vilnius',25.28,54.69,1],['Minsk',27.56,53.9,1],['Tallinn',24.75,59.44,1],['Constanța',28.63,44.17,1],['Izmir',27.14,38.42,1],['Bursa',29.06,40.19,1]],
+  goods:{Wine:['Bordeaux','Porto','Florence'],Cheese:['Zurich','Lyon','Amsterdam'],Beer:['Munich','Prague','Dublin'],Coal:['Essen','Krakow','Cardiff'],Steel:['Essen','Birmingham','Wroclaw'],Cars:['Stuttgart','Turin','Munich'],Fish:['Bergen','Lisbon','Aarhus'],Timber:['Stockholm','Helsinki','Riga'],'Iron ore':['Gothenburg','Bilbao'],Oil:['Constanța','Bergen'],Grain:['Kyiv','Budapest','Odesa'],Olives:['Seville','Bari','Athens'],Citrus:['Valencia','Palermo'],Textiles:['Manchester','Lille','Milan'],Machinery:['Frankfurt','Leipzig','Milan'],Chocolate:['Brussels','Zurich'],Imports:['London','Hamburg','Amsterdam'],Marble:['Genoa','Thessaloniki'],Potatoes:['Minsk','Bremen','Belfast'],Whisky:['Glasgow','Edinburgh'],Tobacco:['Thessaloniki','Izmir'],Flowers:['Amsterdam'],Copper:['Wroclaw','Sofia'],Paper:['Helsinki','Gothenburg'],Salt:['Krakow','Gdansk'],Cork:['Lisbon','Seville'],Porcelain:['Leipzig','Vienna'],Silk:['Bursa','Lyon']},
+  ferries:[['Dover','Calais',6,3],['Harwich','Amsterdam',10,6],['Holyhead','Dublin',8,4],['Glasgow','Belfast',8,4],['Kolding','Odense',3,1],['Copenhagen','Malmö',4,1],['Stockholm','Helsinki',10,6],['Helsinki','Tallinn',6,3],['Palermo','Naples',8,5],['Gothenburg','Aarhus',8,4]]},
+ rr:{name:'Red River Country',blurb:'Texas, Oklahoma, Arkansas and neighbors. Tighter and faster.',ext:{lonMin:-104.6,lonMax:-89,latMin:27.3,latMax:39.6},refLat:33.5,sp:0.4,
+  land:[[[-104.6,39.6],[-89,39.6],[-89,30.3],[-89.6,30.18],[-89.4,29.6],[-89.2,29.3],[-90,29],[-91.2,29.2],[-92.3,29.6],[-94,29.6],[-95,29.2],[-96,28.6],[-96.6,28.4],[-97,28.1],[-97.3,27.6],[-97.4,27.3],[-104.6,27.3]]],
+  lakes:[[[-90.45,30.25],[-89.75,30.3],[-89.75,30.05],[-90.35,30.02]],[[-97,33.92],[-96.45,33.98],[-96.5,33.78],[-96.95,33.78]]],
+  mount:[[[-94.6,36.3],[-92,36.4],[-91.5,35.6],[-93.5,35.5],[-94.6,35.7]],[[-95.2,34.9],[-92.6,34.9],[-92.8,34.3],[-95.2,34.4]],[[-99,34.95],[-98.3,34.95],[-98.3,34.6],[-99,34.6]],[[-104.6,35.9],[-103.8,36.4],[-103.9,38.1],[-104.6,38.6]],[[-104.6,30.1],[-103.3,30.4],[-103.6,31.1],[-104.6,31.2]],[[-101.6,27.3],[-100.4,27.3],[-100.9,28.8],[-102.1,28.8]],[[-97.3,34.6],[-96.8,34.6],[-96.8,34.35],[-97.3,34.35]]],
+  alpine:[[[-104.6,36.6],[-104.2,36.8],[-104.3,37.6],[-104.6,37.8]],[[-103.5,29.1],[-103.1,29.1],[-103.1,29.4],[-103.5,29.4]]],
+  rivers:[['Red',[[-102,34.9],[-100,34.6],[-98.9,34.2],[-97.6,33.9],[-96.6,33.85],[-95,33.9],[-94.1,33.6],[-93.8,32.5],[-92.7,31.4],[-91.7,31]]],['Arkansas',[[-104.6,38.2],[-101.5,38],[-99.4,38.2],[-98,38.3],[-97.3,37.7],[-96.9,36.7],[-96,36.1],[-95.2,35.6],[-94.4,35.4],[-93,35.2],[-92.3,34.75],[-91.6,34.2],[-91.2,33.9]]],['Canadian',[[-104,35.3],[-101.8,35.6],[-100,35.8],[-98.3,35.4],[-97.3,35.1],[-96.2,35.2],[-95.3,35.4]]],['Mississippi',[[-90.2,39.6],[-90.2,38.6],[-89.5,37.3],[-89.2,37],[-89.6,36.5],[-90,35.1],[-91,33.6],[-91.4,31.6],[-91.6,31],[-90.9,30.4],[-90.1,29.95],[-89.3,29.3]]],['Brazos',[[-101.8,33.5],[-99.7,33.2],[-98,32.5],[-97.1,31.6],[-96.4,30.6],[-95.8,29.6],[-95.3,28.9]]],['Colorado',[[-101.5,32.6],[-100,31.8],[-98.2,30.8],[-97.7,30.25],[-96.5,29.5],[-96,28.7]]],['Rio Grande',[[-104.6,29.9],[-103.2,29],[-102.6,29.7],[-101,29.6],[-100.3,28.7],[-99.5,27.5],[-99.4,27.3]]],['Pecos',[[-104.2,32.3],[-103,31.2],[-102,30.5],[-101.4,29.8]]],['Missouri',[[-95.1,39.6],[-94.6,39.1],[-93,38.9],[-92,38.6],[-90.5,38.9]]]],
+  cities:[['Dallas',-96.8,32.78,3],['Houston',-95.37,29.76,3],['Oklahoma City',-97.52,35.47,3],['Kansas City',-94.58,39.1,3],['St. Louis',-90.2,38.63,3],['Memphis',-90.05,35.15,3],['New Orleans',-90.07,29.95,3],['San Antonio',-98.49,29.42,3],
+   ['Fort Worth',-97.33,32.75,2],['Austin',-97.74,30.27,2],['Tulsa',-95.99,36.15,2],['Little Rock',-92.29,34.75,2],['Wichita',-97.34,37.69,2],['Shreveport',-93.75,32.52,2],['Amarillo',-101.83,35.22,2],['Lubbock',-101.86,33.58,2],['Baton Rouge',-91.15,30.45,2],['Springfield',-93.29,37.21,2],['Waco',-97.15,31.55,2],['Corpus Christi',-97.4,27.8,2],['Jackson',-90.18,32.3,2],
+   ['Durant',-96.39,33.99,1],['Fayetteville',-94.16,36.06,1],['Fort Smith',-94.4,35.39,1],['Texarkana',-94.05,33.43,1],['Tyler',-95.3,32.35,1],['Lawton',-98.39,34.6,1],['Ardmore',-97.14,34.17,1],['McAlester',-95.77,34.93,1],['Stillwater',-97.06,36.12,1],['Enid',-97.88,36.4,1],['Muskogee',-95.37,35.75,1],['Bartlesville',-95.98,36.75,1],['Joplin',-94.51,37.08,1],['Hot Springs',-93.06,34.5,1],['Jonesboro',-90.7,35.84,1],['Pine Bluff',-92,34.23,1],['El Dorado',-92.67,33.21,1],['Monroe',-92.12,32.51,1],['Lake Charles',-93.22,30.23,1],['Lafayette',-92.02,30.22,1],['Beaumont',-94.1,30.08,1],['Galveston',-94.8,29.3,1],['Victoria',-97,28.8,1],['Laredo',-99.5,27.53,1],['Del Rio',-100.9,29.36,1],['San Angelo',-100.44,31.46,1],['Abilene',-99.73,32.45,1],['Midland',-102.08,32,1],['Wichita Falls',-98.49,33.91,1],['Sherman',-96.61,33.64,1],['Natchez',-91.4,31.56,1],['Vicksburg',-90.88,32.35,1],['Hattiesburg',-89.29,31.33,1],['Columbia',-92.33,38.95,1],['Dodge City',-100.02,37.75,1],['Hutchinson',-97.93,38.06,1],['Emporia',-96.18,38.4,1],['Topeka',-95.68,39.05,1],['Clovis',-103.2,34.4,1],['Roswell',-103.5,33.39,1],['Raton',-104.44,36.9,1],['Carlsbad',-104.23,32.42,1],['Lufkin',-94.73,31.34,1]],
+  goods:{Oil:['Midland','Tulsa','Beaumont','El Dorado'],Cattle:['Amarillo','Dodge City','San Angelo','Fort Worth'],Wheat:['Enid','Hutchinson','Wichita'],Cotton:['Lubbock','Pine Bluff','Waco'],Rice:['Lake Charles','Jonesboro'],Poultry:['Fayetteville','Tyler'],Roses:['Tyler'],Peanuts:['Durant','Ardmore'],Pecans:['Shreveport','San Antonio'],Timber:['Lufkin','Monroe','Hattiesburg'],Coal:['McAlester','Fort Smith'],Zinc:['Joplin'],Aircraft:['Wichita','Fort Worth'],Machinery:['Kansas City','St. Louis'],Beer:['St. Louis','San Antonio'],Shrimp:['Galveston','Corpus Christi'],Sugar:['Baton Rouge','Lafayette'],Imports:['New Orleans','Houston'],Chemicals:['Houston','Lake Charles','Baton Rouge'],Soybeans:['Jonesboro','Columbia'],Music:['Memphis','Austin'],Crystals:['Hot Springs'],Mohair:['Del Rio','San Angelo'],Salt:['Hutchinson'],Paper:['Pine Bluff','Natchez'],Catfish:['Vicksburg','Jackson'],Potash:['Carlsbad'],Gypsum:['Roswell','Clovis']},
+  ferries:[]}
+};
+
+/* ================= Geometry ================= */
+function pip(pt,poly){let x=pt[0],y=pt[1],ins=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))ins=!ins;}return ins;}
+function segX(a,b,c,d){const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);const d1=o(c,d,a),d2=o(c,d,b),d3=o(a,b,c),d4=o(a,b,d);return((d1>0)!==(d2>0))&&((d3>0)!==(d4>0));}
+const key=(a,b)=>a<b?a+'-'+b:b+'-'+a;
+
+/* ================= Map loading ================= */
+let MAPID=null,EXT,KX,MW,MH,LANDS,LAKES,MOUNT,ALPINE,RIVERS,SP,RH,COLS,ROWS,NODES,GRID,ADJ,EDGE,CITY,CITY_BY_NAME,MAJORS,GOODS,CITY_LIST,GOOD_LIST,FERRIES,payCache,regionCache;
+const MAP_CACHE={};
+function P(lon,lat){return[(lon-EXT.lonMin)*KX,(EXT.latMax-lat)];}
+function isLand(x,y){if(!LANDS.some(l=>pip([x,y],l)))return false;for(const l of LAKES)if(pip([x,y],l))return false;return true;}
+function loadMap(id){
+  if(!MAPS[id])id='na';if(MAPID===id)return;
+  const def=MAPS[id];MAPID=id;EXT=def.ext;KX=Math.cos(def.refLat*Math.PI/180);
+  MW=(EXT.lonMax-EXT.lonMin)*KX;MH=EXT.latMax-EXT.latMin;
+  const pr=l=>l.map(p=>P(p[0],p[1]));
+  LANDS=def.land.map(pr);LAKES=def.lakes.map(pr);MOUNT=def.mount.map(pr);ALPINE=def.alpine.map(pr);RIVERS=def.rivers.map(([name,pts])=>({name,pts:pr(pts)}));
+  GOODS=def.goods;payCache=new Map();regionCache=new Map();
+  if(MAP_CACHE[id]){({SP,RH,COLS,ROWS,NODES,GRID,ADJ,EDGE,CITY,CITY_BY_NAME,MAJORS,CITY_LIST,GOOD_LIST,FERRIES}=MAP_CACHE[id]);return;}
+  SP=def.sp;RH=SP*Math.sqrt(3)/2;COLS=Math.floor(MW/SP)+1;ROWS=Math.floor(MH/RH)+1;
+  NODES=[];GRID=new Int32Array(COLS*ROWS).fill(-1);
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const x=c*SP+(r&1?SP/2:0),y=r*RH;if(x>MW)continue;if(!isLand(x,y))continue;let t=0;if(ALPINE.some(a=>pip([x,y],a)))t=2;else if(MOUNT.some(a=>pip([x,y],a)))t=1;GRID[r*COLS+c]=NODES.length;NODES.push({x,y,r,c,t});}
+  const nbrRC=(r,c)=>r&1?[[r,c-1],[r,c+1],[r-1,c],[r-1,c+1],[r+1,c],[r+1,c+1]]:[[r,c-1],[r,c+1],[r-1,c-1],[r-1,c],[r+1,c-1],[r+1,c]];
+  ADJ=NODES.map(()=>[]);EDGE=new Map();
+  NODES.forEach((n,i)=>{for(const[rr,cc]of nbrRC(n.r,n.c)){if(rr<0||cc<0||rr>=ROWS||cc>=COLS)continue;const j=GRID[rr*COLS+cc];if(j<=i)continue;const m=NODES[j];if(!isLand((n.x+m.x)/2,(n.y+m.y)/2))continue;const rivers=[];RIVERS.forEach((rv,ri)=>{for(let k=0;k<rv.pts.length-1;k++)if(segX([n.x,n.y],[m.x,m.y],rv.pts[k],rv.pts[k+1])){rivers.push(ri);break;}});const info={rivers,ferry:null};EDGE.set(key(i,j),info);ADJ[i].push({j,info});ADJ[j].push({j:i,info});}});
+  CITY=new Map();CITY_BY_NAME={};MAJORS=[];
+  for(const[name,lon,lat,size]of def.cities){const[x,y]=P(lon,lat);let best=-1,bd=1e9;NODES.forEach((n,i)=>{if(CITY.has(i))return;const d=(n.x-x)**2+(n.y-y)**2;if(d<bd){bd=d;best=i;}});CITY.set(best,{name,size,goods:[],node:best});CITY_BY_NAME[name]=best;if(size===3)MAJORS.push(best);}
+  for(const g in GOODS)for(const n of GOODS[g]){const c=CITY.get(CITY_BY_NAME[n]);if(c)c.goods.push(g);}
+  FERRIES=[];for(const[a,b,cost,moves]of def.ferries){const i=CITY_BY_NAME[a],j=CITY_BY_NAME[b];if(i==null||j==null)continue;const k=key(i,j);if(EDGE.has(k))continue;const info={rivers:[],ferry:{cost,moves,a:i,b:j}};EDGE.set(k,info);ADJ[i].push({j,info});ADJ[j].push({j:i,info});FERRIES.push({i,j,k,cost,moves});}
+  CITY_LIST=[...CITY.keys()];GOOD_LIST=Object.keys(GOODS);
+  MAP_CACHE[id]={SP,RH,COLS,ROWS,NODES,GRID,ADJ,EDGE,CITY,CITY_BY_NAME,MAJORS,CITY_LIST,GOOD_LIST,FERRIES};
+}
+const nodeCost=v=>{const c=CITY.get(v);if(c)return c.size===3?5:3;return[1,2,5][NODES[v].t];};
+
+/* ================= Pathfinding ================= */
+class Heap{constructor(){this.a=[]}get size(){return this.a.length}push(p,v){const a=this.a;a.push([p,v]);let i=a.length-1;while(i>0){const q=(i-1)>>1;if(a[q][0]<=a[i][0])break;[a[q],a[i]]=[a[i],a[q]];i=q;}}pop(){const a=this.a,top=a[0],last=a.pop();if(a.length){a[0]=last;let i=0;for(;;){let l=2*i+1,r=l+1,m=i;if(l<a.length&&a[l][0]<a[m][0])m=l;if(r<a.length&&a[r][0]<a[m][0])m=r;if(m===i)break;[a[m],a[i]]=[a[i],a[m]];i=m;}}return top;}}
+function dijkstra(srcs,w,limit){const n=NODES.length,dist=new Float64Array(n).fill(Infinity),prev=new Int32Array(n).fill(-1),hops=new Int32Array(n);const h=new Heap();for(const s of srcs){dist[s]=0;h.push(0,s);}while(h.size){const[d,u]=h.pop();if(d>dist[u])continue;for(const e of ADJ[u]){const wt=w(u,e.j,e.info);if(wt==null)continue;const nd=d+wt;if(limit!=null&&nd>limit+1e-6)continue;if(nd<dist[e.j]){dist[e.j]=nd;prev[e.j]=u;hops[e.j]=hops[u]+(e.info.ferry?e.info.ferry.moves:1);h.push(nd,e.j);}}}return{dist,prev,hops};}
+function walk(prev,t){const p=[t];while(prev[p[p.length-1]]>=0)p.push(prev[p[p.length-1]]);return p.reverse();}
+const baseCost=(v,info)=>info.ferry?info.ferry.cost:nodeCost(v)+(info.rivers.length?2:0);
+function payout(good,dest){const k=good+'>'+dest;if(payCache.has(k))return payCache.get(k);const srcs=GOODS[good].map(n=>CITY_BY_NAME[n]).filter(x=>x!=null);const r=dijkstra(srcs,(u,v,info)=>baseCost(v,info));const h=r.hops[dest],c=r.dist[dest];const v={hops:h,pay:Math.max(8,Math.min(70,Math.round(3+h*0.9+c*0.35)))};payCache.set(k,v);return v;}
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function makeCard(){const out=[];let guard=0;while(out.length<3&&guard++<800){const g=pick(GOOD_LIST),d=pick(CITY_LIST);if(CITY.get(d).goods.includes(g))continue;if(out.some(o=>o.dest===d||o.good===g))continue;const{hops,pay}=payout(g,d);if(!isFinite(pay)||hops<7)continue;out.push({good:g,dest:d,pay});}return out;}
+function regionSet(center,r){const k=center+':'+r+':'+MAPID;if(regionCache.has(k))return regionCache.get(k);const s=new Set([center]);let f=[center];for(let i=0;i<r;i++){const nf=[];for(const u of f)for(const e of ADJ[u]){if(e.info.ferry||s.has(e.j))continue;s.add(e.j);nf.push(e.j);}f=nf;}regionCache.set(k,s);return s;}
+
+/* ================= Rules ================= */
+const TRAINS=[{name:'Freight',speed:9,cap:2},{name:'Express',speed:12,cap:2},{name:'Heavy Haul',speed:9,cap:3},{name:'Super Express',speed:12,cap:3}];
+const UPG={0:[1,2],1:[3],2:[3],3:[]};
+const LENGTHS={quick:{label:'Quick',cash:100,majors:4},short:{label:'Short',cash:150,majors:5},classic:{label:'Classic',cash:250,majors:7}};
+const COLORS=[['Red','#D62839'],['Green','#2A9D4B'],['Purple','#7D3CC0'],['Orange','#F07F13']];
+const BUILD_BUDGET=20,USE_FEE=4,UPGRADE_COST=20,EVENT_CHANCE=0.17;
+const EV_STYLE={derail:{label:'Derailment',color:'rgba(214,40,57,.22)',stroke:'#D62839',icon:'⚠'},strike:{label:'Strike',color:'rgba(125,60,192,.2)',stroke:'#7D3CC0',icon:'✋'},snow:{label:'Blizzard',color:'rgba(255,255,255,.45)',stroke:'#FFFFFF',icon:'❄'},flood:{label:'Flood',icon:'🌊'},tax:{label:'Tax',icon:'$'}};
+
+function newGame(opts){return{v:2,id:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6),rev:0,status:'setup',created:Date.now(),len:opts.len||'short',map:opts.map||'na',eventsOn:opts.eventsOn!==false,players:[],track:{},turn:null,seq:[],log:[],events:[],lastEvent:null,winner:null};}
+function addPlayer(g,seat,name,color){g.players.push({seat,name,color,cash:50,train:0,pos:null,loads:[],stalled:false,cards:[makeCard(),makeCard(),makeCard()]});}
+function log(g,s){g.log.unshift(s);g.log=g.log.slice(0,30);}
+function startGame(g){const n=g.players.length,a=[...Array(n).keys()];g.seq=[...a,...a.slice().reverse()];g.status='playing';g.turn=null;beginTurn(g,g.seq[0],'init',0);log(g,'Game on. Everyone gets two building turns first.');}
+function inEvent(g,type,node){return(g.events||[]).some(e=>e.type===type&&e.center!=null&&regionSet(e.center,e.r).has(node));}
+function floodedRivers(g){return(g.events||[]).filter(e=>e.type==='flood').map(e=>e.river);}
+function beginTurn(g,p,kind,seqIdx){const pl=g.players[p],sp=TRAINS[pl.train].speed;let moves=sp;
+  if(kind==='op'){if(pl.stalled){moves=0;pl.stalled=false;log(g,pl.name+'’s crew is cleaning up the derailment. No moving this turn.');}else if(pl.pos!=null&&inEvent(g,'snow',pl.pos))moves=Math.floor(sp/2);}
+  g.turn={p,kind,seqIdx,phase:kind==='init'?'build':'move',moves,spent:0,builds:[],upgraded:false,fees:[],acted:false,n:(g.turn?.n||0)+1};}
+function netNodes(g,p){const s=new Set();for(const k in g.track)if(g.track[k]===p){const[a,b]=k.split('-');s.add(+a);s.add(+b);}return s;}
+function majorsConnected(g,p){const par=new Map();const f=x=>{while(par.get(x)!==x){par.set(x,par.get(par.get(x)));x=par.get(x);}return x;};for(const k in g.track)if(g.track[k]===p){const[a,b]=k.split('-').map(Number);if(!par.has(a))par.set(a,a);if(!par.has(b))par.set(b,b);const ra=f(a),rb=f(b);if(ra!==rb)par.set(ra,rb);}const cnt=new Map();for(const m of MAJORS)if(par.has(m)){const r=f(m);cnt.set(r,(cnt.get(r)||0)+1);}let mx=0;for(const v of cnt.values())mx=Math.max(mx,v);return mx;}
+function endTurn(g){const t=g.turn,pl=g.players[t.p],L=LENGTHS[g.len];
+  if(t.kind==='op'&&pl.cash>=L.cash&&majorsConnected(g,t.p)>=L.majors){g.status='over';g.winner=t.p;log(g,pl.name+' wins with $'+pl.cash+'M!');return;}
+  const before=(g.events||[]).length;g.events=(g.events||[]).filter(e=>!(e.by===t.p&&t.n>e.n));if(g.events.length<before)log(g,'Some trouble on the line has cleared up.');
+  if(t.kind==='init'){if(t.seqIdx+1<g.seq.length){beginTurn(g,g.seq[t.seqIdx+1],'init',t.seqIdx+1);return;}beginTurn(g,(t.p+1)%g.players.length,'op',0);log(g,'Building’s done. Place your trains and start hauling.');return;}
+  beginTurn(g,(t.p+1)%g.players.length,'op',0);}
+function buildPath(g,p,target){const net=netNodes(g,p);const srcs=[...new Set([...net,...MAJORS])];const fl=floodedRivers(g);
+  const r=dijkstra(srcs,(u,v,info)=>{const o=g.track[key(u,v)];if(o===p)return 0;if(o!==undefined)return null;if(fl.length&&info.rivers.some(x=>fl.includes(x)))return null;if(inEvent(g,'snow',v)||inEvent(g,'snow',u))return null;return baseCost(v,info);});
+  if(!isFinite(r.dist[target])||r.dist[target]===0)return null;const path=walk(r.prev,target);const edges=[];for(let i=0;i<path.length-1;i++){const k=key(path[i],path[i+1]);if(g.track[k]!==p)edges.push(k);}if(!edges.length)return null;return{path,edges,cost:r.dist[target]};}
+function moveMap(g){const t=g.turn,pl=g.players[t.p];if(pl.pos==null||t.moves<=0)return null;return dijkstra([pl.pos],(u,v,info)=>{const o=g.track[key(u,v)];if(o===undefined)return null;return(info.ferry?info.ferry.moves:1)+(o===t.p?0:0.001);},t.moves);}
+function movePlan(g,target){const mm=moveMap(g);if(!mm||!isFinite(mm.dist[target])||target===g.players[g.turn.p].pos)return null;const path=walk(mm.prev,target);const owners=new Set();for(let i=0;i<path.length-1;i++){const o=g.track[key(path[i],path[i+1])];if(o!==g.turn.p)owners.add(o);}const newOwners=[...owners].filter(o=>!g.turn.fees.includes(o));return{path,steps:Math.round(mm.dist[target]),owners:newOwners,fee:newOwners.length*USE_FEE};}
+
+/* ---------- events ---------- */
+function applyEvent(g,by){
+  const W=[['derail',3],['flood',2],['strike',3],['snow',3],['tax',1]];let r=Math.random()*12,type='derail';for(const[t,w]of W){if((r-=w)<0){type=t;break;}}
+  const e={id:(g.evCount=(g.evCount||0)+1),type,by,n:g.turn.n};const byName=g.players[by].name;let text='';
+  if(type==='flood'){e.river=Math.floor(Math.random()*RIVERS.length);let lost=0;for(const k in g.track){const inf=EDGE.get(k);if(inf&&inf.rivers.includes(e.river)){delete g.track[k];lost++;}}text='Flood on the '+RIVERS[e.river].name+'! Every bridge over it washed out'+(lost?' ('+lost+' segment'+(lost>1?'s':'')+' of track lost)':'')+'. Nobody can build across it until '+byName+'’s next turn ends.';}
+  else if(type==='tax'){const paid=[];for(const pl of g.players){const t=pl.cash>150?15:pl.cash>100?10:pl.cash>50?5:0;if(t){pl.cash-=t;paid.push(pl.name+' $'+t+'M');}}text='Tax time! '+(paid.length?'Paid: '+paid.join(', ')+'.':'Nobody had enough cash to owe anything.');}
+  else{let c=pick(CITY_LIST);if(type==='snow'){const opts=[pick(CITY_LIST),pick(CITY_LIST),pick(CITY_LIST)];c=opts.sort((a,b)=>NODES[a].y-NODES[b].y)[0];}
+    e.center=c;e.r=type==='snow'?5:type==='strike'?3:3;const nm=CITY.get(c).name;const reg=regionSet(c,e.r);
+    if(type==='derail'){const hit=[];g.players.forEach(pl=>{if(pl.pos!=null&&reg.has(pl.pos)){if(pl.loads.length)pl.loads.splice(Math.floor(Math.random()*pl.loads.length),1);pl.stalled=true;hit.push(pl.name);}});text='Derailment near '+nm+'! '+(hit.length?hit.join(' and ')+' lost a load and can’t move next turn.':'Luckily no trains were close by.');}
+    else if(type==='strike')text='Strike around '+nm+'! No picking up or delivering in the shaded area until '+byName+'’s next turn ends.';
+    else text='Blizzard over '+nm+'! Trains starting a turn in the storm move at half speed, and no building inside it until '+byName+'’s next turn ends.';}
+  e.text=text;if(type!=='tax')g.events.push(e);g.lastEvent={id:e.id,text,type};log(g,text);
+}
+function drawCard(g,by){if(g.eventsOn&&Math.random()<EVENT_CHANCE)applyEvent(g,by);return makeCard();}
+
+/* ================= App state ================= */
+let G=null,mode='lobby',gid=null,preview=null,selCity=null,selDemand=null,sheetState='normal',lastTurnSeen=null,lastEventSeen=0;
+let db=null,userCap=null,seatId=null,unsubGame=null,lobbyGames=[],dbReady=false,dbTried=false,backend='claude',fireError=null;
+const seatMem={};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2800);}
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch{return null;}}
+function deviceId(){let d=ls('wr-device');if(!d){d='dev-'+Math.random().toString(36).slice(2,10);ls('wr-device',d);}return d;}
+const curP=()=>G&&G.turn?G.players[G.turn.p]:null;
+function linkSeat(){if(!G)return null;if(seatMem[G.id]!=null)return seatMem[G.id];const v=ls('wr-seat-'+G.id);return v==null?null:+v;}
+function setLinkSeat(i){seatMem[G.id]=i;ls('wr-seat-'+G.id,String(i));}
+function mySeatIndex(){if(!G)return -1;if(mode==='local')return G.turn?G.turn.p:-1;if(mode==='link'){const s=linkSeat();return s==null?-1:s;}return G.players.findIndex(p=>p.seat===seatId);}
+function canAct(){if(!G||G.status!=='playing')return false;if(mode==='local')return true;if(mode==='link')return linkSeat()===G.turn.p;return G.players[G.turn.p].seat===seatId;}
+function useGame(g){G=g;if(G){loadMap(G.map||'na');if(!G.events)G.events=[];}}
+
+/* ---------- persistence ---------- */
+let writing=false,pending=null;
+function saveLinkGame(){ls('wr-link-'+G.id,JSON.stringify(G));let idx=[];try{idx=JSON.parse(ls('wr-link-index')||'[]');}catch{}idx=[G.id,...idx.filter(x=>x!==G.id)].slice(0,12);ls('wr-link-index',JSON.stringify(idx));}
+function commit(){G.rev=(G.rev||0)+1;preview=null;if(mode==='local')ls('wr-local',JSON.stringify(G));else if(mode==='link')saveLinkGame();else if(mode==='online'){pending=JSON.parse(JSON.stringify(G));flush();}render();}
+async function flush(){if(writing||!pending)return;writing=true;const data=pending;pending=null;try{await db.doc('games/'+gid).set(data);}catch(e){if(e&&e.code==='unavailable'){await new Promise(r=>setTimeout(r,600+Math.random()*600));try{await db.doc('games/'+gid).set(data);}catch(e2){toast('That move didn’t save. Check your connection and try again.');}}else if(e&&e.code==='invalid_argument')toast('You can view this game but not play in it. Ask the owner to give you edit access.');else if(e&&e.code==='permission-denied')toast('The database blocked that move. Check the Firestore rules.');else toast('That move didn’t save ('+(e&&e.code||'error')+').');}writing=false;flush();}
+
+async function initDb(){
+  try{
+    if(!window.claude||!window.claude.use){if(FIREBASE_CONFIG)await initFire();dbTried=true;render();return;}
+    const timer=setTimeout(()=>{dbTried=true;render();},10000);
+    const[d,u]=await Promise.all([window.claude.use('db'),window.claude.use('user')]);
+    clearTimeout(timer);db=d;userCap=u;let id=null;try{id=u?await u.id():null;}catch{}
+    seatId=id||deviceId();dbTried=true;dbReady=!!db;
+    if(db){db.collection('games').onSnapshot(s=>{lobbyGames=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.created||0)-(a.created||0));if(mode==='lobby')render();},()=>{});
+      const m=location.hash.match(/^#g-([a-z0-9-]+)$/i);if(m&&mode==='lobby')openOnline(m[1]);}
+    render();
+  }catch(e){dbTried=true;render();}
+}
+/* ---------- Firebase live play ---------- */
+function loadScript(src){return new Promise((res,rej)=>{const el=document.createElement('script');el.src=src;el.onload=res;el.onerror=()=>rej(new Error('Couldn’t load '+src));document.head.appendChild(el);});}
+const fireWrap=x=>({exists:x.exists,id:x.id,data:()=>x.exists?JSON.parse(x.data().s):undefined});
+function fireAdapter(fs){return{doc(path){const r=fs.doc(path);return{
+  set:d=>r.set({s:JSON.stringify(d),rev:d.rev||0,t:Date.now()}),
+  get:async()=>fireWrap(await r.get()),
+  delete:()=>Promise.reject({code:'permission-denied'}),
+  onSnapshot:(next,err)=>r.onSnapshot(x=>next(fireWrap(x)),e=>err&&err(e))};}};}
+async function initFire(){try{const v='10.12.2';await loadScript('https://www.gstatic.com/firebasejs/'+v+'/firebase-app-compat.js');await loadScript('https://www.gstatic.com/firebasejs/'+v+'/firebase-firestore-compat.js');
+  firebase.initializeApp(FIREBASE_CONFIG);db=fireAdapter(firebase.firestore());backend='fire';seatId=deviceId();dbReady=true;
+  const m=location.hash.match(/^#(?:j=|g-)([a-z0-9-]+)$/i);if(m){fireIndexAdd(m[1]);openOnline(m[1]);}
+  refreshFire();}catch(e){fireError=String(e&&e.message||e);}}
+function fireIndex(){try{return JSON.parse(ls('wr-fire-index')||'[]');}catch{return[];}}
+function fireIndexAdd(id){ls('wr-fire-index',JSON.stringify([id,...fireIndex().filter(x=>x!==id)].slice(0,20)));}
+function fireIndexDel(id){ls('wr-fire-index',JSON.stringify(fireIndex().filter(x=>x!==id)));ls('wr-fire-sum-'+id,null);}
+function fireSummarize(id,g){ls('wr-fire-sum-'+id,JSON.stringify({names:g.players.map(p=>p.name),status:g.status,map:g.map,len:g.len,turnSeat:g.turn&&g.players[g.turn.p]?g.players[g.turn.p].seat:null,turnName:g.turn&&g.players[g.turn.p]?g.players[g.turn.p].name:'',winner:g.winner!=null&&g.players[g.winner]?g.players[g.winner].name:''}));}
+function refreshFire(){for(const id of fireIndex())db.doc('games/'+id).get().then(s=>{if(s.exists){fireSummarize(id,s.data());if(mode==='lobby')render();}}).catch(()=>{});}
+function inviteLink(){return location.href.split('#')[0]+'#j='+gid;}
+async function shareInvite(){const url=inviteLink();if(navigator.share){try{await navigator.share({title:'Wax & Rail',text:'Join my Wax & Rail game!',url});return;}catch(e){if(e&&e.name==='AbortError')return;}}copyText(url,'Invite link copied.');}
+function openOnline(id){if(backend==='fire')fireIndexAdd(id);if(unsubGame)unsubGame();mode='online';gid=id;G=null;preview=null;selCity=null;selDemand=null;try{history.replaceState(null,'','#g-'+id);}catch{}
+  let first=true;
+  unsubGame=db.doc('games/'+id).onSnapshot(s=>{if(!s.exists){if(first){toast('That game isn’t here anymore.');goLobby();}return;}const d=s.data();if(!G||(d.rev||0)>=(G.rev||0)){const prevTurn=G&&G.turn?G.turn.n:null;useGame(JSON.parse(JSON.stringify(d)));if(first){lastEventSeen=G.lastEvent?G.lastEvent.id:0;}if(backend==='fire')fireSummarize(id,G);if(G.turn&&prevTurn!==null&&G.turn.n!==prevTurn&&canAct()){toast('Your turn!');try{navigator.vibrate&&navigator.vibrate([120,60,120]);}catch{}}first=false;render();}},e=>toast(e&&e.code==='permission-denied'?'The database blocked this game. Check the Firestore rules.':'Lost the connection to this game.'));
+  render();}
+function goLobby(){if(backend==='fire'&&db)setTimeout(refreshFire,50);if(unsubGame){unsubGame();unsubGame=null;}mode='lobby';G=null;gid=null;preview=null;selCity=null;selDemand=null;try{history.replaceState(null,'',location.pathname+location.search);}catch{}sheetState='normal';render.fitted=false;render();}
+async function createOnline(len){const g=newGame({len});g.rev=1;try{await db.doc('games/'+g.id).set(g);openOnline(g.id);}catch(e){toast(e&&e.code==='permission-denied'?'The database blocked that. Check the Firestore rules.':e&&e.code==='invalid_argument'?'You don’t have permission to create games here.':'Couldn’t create the game. Try again.');}}
+function startLocal(resume){mode='local';preview=null;selCity=null;selDemand=null;let g=null;if(resume){try{g=JSON.parse(ls('wr-local'));}catch{}}useGame(g||newGame({}));lastTurnSeen=G.turn?G.turn.n:null;lastEventSeen=G.lastEvent?G.lastEvent.id:0;render();}
+function startLink(id){mode='link';preview=null;selCity=null;selDemand=null;let g=null;if(id){try{g=JSON.parse(ls('wr-link-'+id));}catch{}}useGame(g||newGame({}));lastEventSeen=G.lastEvent?G.lastEvent.id:0;render();}
+
+/* ---------- turn links ---------- */
+const b64u=u8=>{let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');};
+const unb64u=s=>{s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;};
+async function encodeGame(g){const lite=JSON.parse(JSON.stringify(g));lite.log=lite.log.slice(0,12);const json=JSON.stringify(lite);try{const cs=new CompressionStream('deflate-raw');const buf=await new Response(new Blob([json]).stream().pipeThrough(cs)).arrayBuffer();return'z'+b64u(new Uint8Array(buf));}catch{return'j'+b64u(new TextEncoder().encode(json));}}
+async function decodeGame(code){code=code.trim().replace(/^.*#t=/,'');const kind=code[0],u8=unb64u(code.slice(1));let json;if(kind==='z'){const ds=new DecompressionStream('deflate-raw');json=await new Response(new Blob([u8]).stream().pipeThrough(ds)).text();}else json=new TextDecoder().decode(u8);const g=JSON.parse(json);if(!g||!g.id||!Array.isArray(g.players))throw new Error('bad');return g;}
+async function turnLink(){const code=await encodeGame(G);return{url:location.href.split('#')[0]+'#t='+code,code};}
+async function receiveCode(code){let g;try{g=await decodeGame(code);}catch{toast('That turn link didn’t work. Try copying it again.');return;}
+  let have=null;try{have=JSON.parse(ls('wr-link-'+g.id));}catch{}
+  mode='link';preview=null;selCity=null;selDemand=null;
+  if(have&&(have.rev||0)>=(g.rev||0)){useGame(have);toast('You already have this turn.');}else{useGame(g);saveLinkGame();}
+  lastEventSeen=0;try{history.replaceState(null,'',location.pathname+location.search);}catch{}
+  if(linkSeat()==null)askSeat();else render();
+  if(G.lastEvent&&canAct()){/* show events that happened since */}
+}
+function askSeat(){render();showOverlay('<h3>Who are you?</h3><p class="muted">Pick your player so this phone knows whose turns are yours.</p><div class="row" style="justify-content:center">'+G.players.map((p,i)=>'<button class="btn" type="button" data-act="seat" data-i="'+i+'"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'+p.color+';margin-right:6px;vertical-align:-1px"></span>'+esc(p.name)+'</button>').join('')+'</div>');}
+async function shareTurn(){const{url}=await turnLink();const next=G.status==='over'?'':G.players[G.turn.p].name;const text=G.status==='over'?'Wax & Rail: game over! See the final map.':'Wax & Rail: your turn, '+next+'!';if(navigator.share){try{await navigator.share({title:'Wax & Rail',text,url});return;}catch(e){if(e&&e.name==='AbortError')return;}}copyText(url,'Link copied. Paste it in a text.');}
+async function copyTurn(kind){const{url,code}=await turnLink();copyText(kind==='code'?code:url,kind==='code'?'Turn code copied.':'Link copied. Paste it in a text.');}
+async function copyText(t,msg){try{await navigator.clipboard.writeText(t);toast(msg);}catch{window.prompt('Copy this:',t);}}
+function sendOverlay(){const who=G.status==='over'?'everyone':esc(G.players[G.turn.p].name);showOverlay('<h3>Send it to '+who+'</h3><p class="muted">Your turn is saved. Text the link so they can play theirs.</p><p class="row" style="justify-content:center"><button class="btn go" type="button" data-act="share">Send turn</button><button class="btn" type="button" data-act="copyLink">Copy link</button></p><p><button class="btn" type="button" data-act="closeOverlay">Later</button></p>');}
+
+/* ================= Actions ================= */
+function act(fn){if(!canAct())return;fn();commit();}
+function doBuild(){if(!preview||preview.type!=='build')return;const t=G.turn,pl=curP(),pv=preview;if(pv.cost>BUILD_BUDGET-t.spent){toast('That’s over this turn’s $20M build limit.');return;}if(pv.cost>pl.cash){toast('Not enough cash.');return;}act(()=>{for(const k of pv.edges)G.track[k]=t.p;pl.cash-=pv.cost;t.spent+=pv.cost;t.builds.push({edges:pv.edges,cost:pv.cost});t.acted=true;});}
+function undoBuild(){act(()=>{const t=G.turn,b=t.builds.pop();if(!b)return;for(const k of b.edges)if(G.track[k]===t.p)delete G.track[k];curP().cash+=b.cost;t.spent-=b.cost;});}
+function doMove(){if(!preview||preview.type!=='move')return;const pv=preview,pl=curP();if(pv.fee>pl.cash){toast('Not enough cash for the track fee.');return;}act(()=>{const t=G.turn;for(const o of pv.owners){G.players[o].cash+=USE_FEE;t.fees.push(o);}pl.cash-=pv.fee;pl.pos=pv.path[pv.path.length-1];t.moves=Math.max(0,t.moves-pv.steps);t.acted=true;if(pv.fee)log(G,pl.name+' paid $'+pv.fee+'M to use other track.');});}
+function placeTrain(node){act(()=>{curP().pos=node;log(G,curP().name+' set out from '+CITY.get(node).name+'.');});}
+function pickup(good){act(()=>{const pl=curP();if(pl.loads.length>=TRAINS[pl.train].cap||inEvent(G,'strike',pl.pos))return;pl.loads.push(good);G.turn.acted=true;});}
+function dump(i){act(()=>{curP().loads.splice(i,1);});}
+function deliver(ci,di){act(()=>{const pl=curP(),d=pl.cards[ci][di];const li=pl.loads.indexOf(d.good);if(li<0||pl.pos!==d.dest||inEvent(G,'strike',pl.pos))return;pl.loads.splice(li,1);pl.cash+=d.pay;log(G,pl.name+' delivered '+d.good+' to '+CITY.get(d.dest).name+' for $'+d.pay+'M.');pl.cards[ci]=drawCard(G,G.turn.p);G.turn.acted=true;});selDemand=null;}
+function doneMoving(){act(()=>{G.turn.phase='build';});}
+function upgrade(to){const pl=curP();if(pl.cash<UPGRADE_COST){toast('Upgrades cost $20M.');return;}act(()=>{pl.cash-=UPGRADE_COST;pl.train=to;G.turn.upgraded=true;G.turn.spent=BUILD_BUDGET;log(G,pl.name+' upgraded to '+TRAINS[to].name+'.');});}
+function discardHand(){const wasMine=canAct();act(()=>{const pl=curP(),p=G.turn.p;pl.cards=[drawCard(G,p),makeCard(),makeCard()];log(G,pl.name+' tossed their cards for a fresh hand.');endTurn(G);});afterTurn(wasMine);}
+function finishTurn(){const wasMine=canAct();act(()=>{endTurn(G);});selDemand=null;afterTurn(wasMine);}
+function afterTurn(wasMine){if(mode==='link'&&wasMine&&(G.status==='over'||!canAct()))sendOverlay();}
+
+/* ================= Map tap ================= */
+function onTap(node){
+  if(node==null){preview=null;selCity=null;render();return;}
+  selCity=CITY.has(node)?node:null;
+  if(G&&canAct()){
+    const t=G.turn,pl=curP();
+    if(t.phase==='build'&&!t.upgraded){
+      if(preview&&preview.type==='build'&&preview.target===node){doBuild();return;}
+      const bp=buildPath(G,t.p,node);preview=bp?{type:'build',target:node,...bp}:null;
+      if(!bp&&!selCity)toast('Can’t build there. Track has to start at a major city or your own line.');
+    }else if(t.phase==='move'&&t.kind==='op'){
+      if(pl.pos==null){if(CITY.has(node)&&netNodes(G,t.p).has(node)){placeTrain(node);return;}toast('Tap a city on your own track to place your train.');}
+      else{if(preview&&preview.type==='move'&&preview.target===node){doMove();return;}const mp=movePlan(G,node);preview=mp?{type:'move',target:node,...mp}:null;}
+    }
+  }
+  if(sheetState==='collapsed')sheetState='normal';
+  render();
+}
+
+/* ================= Canvas ================= */
+const cv=$('#map'),ctx=cv.getContext('2d');let VW=0,VH=0,DPR=1;const view={s:10,ox:0,oy:0};let fitS=10;
+function resize(){DPR=Math.min(window.devicePixelRatio||1,2.5);VW=cv.clientWidth;VH=cv.clientHeight;cv.width=Math.round(VW*DPR);cv.height=Math.round(VH*DPR);const first=fitS===10&&view.s===10;fitS=Math.min(VW/MW,(VH-110)/MH);if(first)fitView();draw();placeZoom();}
+function visArea(){const top=$('#top').getBoundingClientRect().bottom;const sh=$('#sheet');const bot=sh.classList.contains('full')?VH:sh.getBoundingClientRect().top;return{top,bot:Math.max(top+120,bot)};}
+function fitView(){fitS=Math.min(VW/MW,(VH-110)/MH);const a=visArea(),h=a.bot-a.top;view.s=Math.max(VW/MW,h/MH);view.ox=(VW-MW*view.s)/2;view.oy=a.top+(h-MH*view.s)/2;draw();}
+function zoomAt(f,cx,cy){const ns=Math.max(fitS*0.7,Math.min(90,view.s*f));const wx=(cx-view.ox)/view.s,wy=(cy-view.oy)/view.s;view.s=ns;view.ox=cx-wx*ns;view.oy=cy-wy*ns;draw();}
+let drawQueued=false;function draw(){if(drawQueued)return;drawQueued=true;requestAnimationFrame(()=>{drawQueued=false;paint();});}
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return(h>>>0)/4294967296;}
+function polyPath(poly){ctx.beginPath();poly.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}
+function line(pts){ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();}
+function ring(n,r,color,w,dash){ctx.strokeStyle=color;ctx.lineWidth=w;if(dash)ctx.setLineDash(dash);ctx.beginPath();ctx.arc(n.x,n.y,r,0,6.283);ctx.stroke();if(dash)ctx.setLineDash([]);}
+const DEST='#FF2E88',SRC='#F2B705';
+function paint(){
+  const s=view.s,u=SP/0.95;ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#2B4C69';ctx.fillRect(0,0,VW,VH);
+  ctx.setTransform(DPR*s,0,0,DPR*s,DPR*view.ox,DPR*view.oy);
+  ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=0.05*u;for(let y=-2;y<MH+4;y+=0.9*u){ctx.beginPath();ctx.moveTo(-4,y);ctx.lineTo(MW+4,y);ctx.stroke();}
+  for(const l of LANDS){polyPath(l);ctx.fillStyle='#DCE2C9';ctx.fill();ctx.strokeStyle='#8FA0A8';ctx.lineWidth=0.08*u;ctx.stroke();}
+  for(const l of LAKES){polyPath(l);ctx.fillStyle='#2B4C69';ctx.fill();}
+  const fl=G?floodedRivers(G):[];
+  ctx.lineJoin='round';ctx.lineCap='round';RIVERS.forEach((r,ri)=>{const f=fl.includes(ri);ctx.strokeStyle=f?'#8B5A2B':'#4A86B8';ctx.lineWidth=(f?0.4:0.13)*u;line(r.pts);});
+  // events regions
+  if(G)for(const e of G.events||[]){if(e.center==null)continue;const st=EV_STYLE[e.type];ctx.fillStyle=st.color;ctx.strokeStyle=st.stroke;ctx.lineWidth=0.1*u;ctx.setLineDash([0.3*u,0.2*u]);for(const v of regionSet(e.center,e.r)){const n=NODES[v];ctx.beginPath();ctx.arc(n.x,n.y,0.55*u,0,6.283);ctx.fill();}ctx.setLineDash([]);}
+  // ferries (unbuilt)
+  ctx.setLineDash([0.25*u,0.2*u]);ctx.strokeStyle='rgba(232,238,242,.85)';ctx.lineWidth=0.1*u;for(const f of FERRIES){if(G&&G.track[f.k]!==undefined)continue;const a=NODES[f.i],b=NODES[f.j];ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}ctx.setLineDash([]);
+  for(let i=0;i<NODES.length;i++){if(CITY.has(i))continue;const n=NODES[i];if(n.t===0){ctx.fillStyle='#3B4149';ctx.beginPath();ctx.arc(n.x,n.y,0.075*u,0,6.283);ctx.fill();}else{const z=(n.t===2?0.3:0.24)*u;ctx.beginPath();ctx.moveTo(n.x,n.y-z);ctx.lineTo(n.x+z*0.95,n.y+z*0.6);ctx.lineTo(n.x-z*0.95,n.y+z*0.6);ctx.closePath();if(n.t===2){ctx.fillStyle='#5B4433';ctx.fill();}else{ctx.strokeStyle='#7D5E45';ctx.lineWidth=0.07*u;ctx.stroke();}}}
+  const vi=mySeatIndex();const viewer=G&&vi>=0&&G.players[vi]&&G.status!=='setup'?G.players[vi]:null;
+  let selD=null;if(viewer&&selDemand)selD=viewer.cards[selDemand.c]?.[selDemand.d]||null;
+  if(viewer&&!selD){for(const card of viewer.cards)for(const d of card)ring(NODES[d.dest],0.7*u,'rgba(255,46,136,.45)',0.09*u);}
+  if(G&&G.track){for(const k in G.track){const o=G.track[k],pl=G.players[o];if(!pl)continue;const[a,b]=k.split('-').map(Number);crayon(NODES[a],NODES[b],pl.color,k,u);}}
+  for(const[i,c]of CITY){const n=NODES[i];ctx.lineWidth=0.08*u;ctx.strokeStyle='#2A1F1F';ctx.fillStyle='#C2364A';
+    if(c.size===3){ctx.beginPath();for(let k=0;k<6;k++){const a=Math.PI/6+k*Math.PI/3;const x=n.x+Math.cos(a)*0.58*u,y=n.y+Math.sin(a)*0.58*u;k?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.closePath();ctx.globalAlpha=0.9;ctx.fill();ctx.globalAlpha=1;ctx.stroke();}
+    else if(c.size===2){const h=0.25*u;ctx.fillRect(n.x-h,n.y-h,2*h,2*h);ctx.strokeRect(n.x-h,n.y-h,2*h,2*h);}
+    else{ctx.beginPath();ctx.arc(n.x,n.y,0.22*u,0,6.283);ctx.fill();ctx.stroke();}}
+  if(selD){for(const sn of GOODS[selD.good]){const m=NODES[CITY_BY_NAME[sn]];if(!m)continue;ctx.fillStyle='rgba(242,183,5,.35)';ctx.beginPath();ctx.arc(m.x,m.y,0.9*u,0,6.283);ctx.fill();ring(m,0.9*u,SRC,0.16*u,[0.25*u,0.16*u]);}
+    const dn=NODES[selD.dest];ctx.fillStyle='rgba(255,46,136,.3)';ctx.beginPath();ctx.arc(dn.x,dn.y,1.05*u,0,6.283);ctx.fill();ring(dn,1.05*u,DEST,0.24*u);ring(dn,1.35*u,DEST,0.08*u);}
+  if(G&&G.status==='playing'&&canAct()&&G.turn.phase==='move'&&G.turn.kind==='op'){const mm=moveMap(G);if(mm){ctx.fillStyle='rgba(242,183,5,.55)';for(let i=0;i<NODES.length;i++){if(mm.dist[i]>0&&isFinite(mm.dist[i])){ctx.beginPath();ctx.arc(NODES[i].x,NODES[i].y,0.2*u,0,6.283);ctx.fill();}}}else if(curP().pos==null){const net=netNodes(G,G.turn.p);for(const[i]of CITY)if(net.has(i))ring(NODES[i],0.8*u,SRC,0.16*u);}}
+  if(preview){const pts=preview.path.map(i=>[NODES[i].x,NODES[i].y]);ctx.strokeStyle='#1C2530';ctx.lineWidth=0.34*u;line(pts);ctx.strokeStyle=preview.type==='build'?'#F2B705':'#FFFFFF';ctx.lineWidth=0.2*u;ctx.setLineDash([0.35*u,0.2*u]);line(pts);ctx.setLineDash([]);const e=pts[pts.length-1];ctx.fillStyle='#F2B705';ctx.beginPath();ctx.arc(e[0],e[1],0.3*u,0,6.283);ctx.fill();ctx.strokeStyle='#1C2530';ctx.lineWidth=0.08*u;ctx.stroke();}
+  if(selCity!=null)ring(NODES[selCity],1.0*u,'#FFFFFF',0.12*u);
+  // screen space
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.textAlign='center';ctx.textBaseline='top';ctx.lineJoin='round';const su=s*u;
+  for(const[i,c]of CITY){if(c.size===1&&su<20)continue;if(c.size===2&&su<11)continue;const n=NODES[i],X=n.x*s+view.ox,Y=n.y*s+view.oy+(c.size===3?0.62:0.32)*su+2;if(X<-60||X>VW+60||Y<-20||Y>VH+20)continue;ctx.font=(c.size===3?'700 13px ':'700 11px ')+'"Atkinson Hyperlegible",sans-serif';ctx.strokeStyle='rgba(220,226,201,.95)';ctx.lineWidth=3.5;ctx.strokeText(c.name,X,Y);ctx.fillStyle='#1C2530';ctx.fillText(c.name,X,Y);}
+  if(G)for(const e of G.events||[]){if(e.center==null)continue;const n=NODES[e.center];const X=n.x*s+view.ox,Y=n.y*s+view.oy-Math.max(22,su*1.4);ctx.font='700 18px sans-serif';ctx.textBaseline='middle';ctx.fillText(EV_STYLE[e.type].icon,X,Y);ctx.textBaseline='top';}
+  if(selD){const dn=NODES[selD.dest];const X=dn.x*s+view.ox,Y=dn.y*s+view.oy-1.35*su-24;ctx.font='700 12px "Atkinson Hyperlegible",sans-serif';const w=ctx.measureText('Deliver here').width+14;ctx.fillStyle=DEST;ctx.beginPath();ctx.roundRect?ctx.roundRect(X-w/2,Y,w,20,10):ctx.rect(X-w/2,Y,w,20);ctx.fill();ctx.fillStyle='#fff';ctx.fillText('Deliver here',X,Y+4);}
+  if(G&&G.players){const seen={};G.players.forEach(pl=>{if(pl.pos==null)return;const n=NODES[pl.pos];if(!n)return;const k=seen[pl.pos]=(seen[pl.pos]||0)+1;const X=n.x*s+view.ox+(k-1)*14,Y=n.y*s+view.oy-Math.max(14,su*0.6);const r=11;ctx.beginPath();ctx.moveTo(X,Y+r+7);ctx.lineTo(X-6,Y+r-2);ctx.lineTo(X+6,Y+r-2);ctx.closePath();ctx.fillStyle='#fff';ctx.fill();ctx.beginPath();ctx.arc(X,Y,r,0,6.283);ctx.fillStyle=pl.color;ctx.fill();ctx.lineWidth=2.5;ctx.strokeStyle='#fff';ctx.stroke();ctx.fillStyle='#fff';ctx.font='700 12px "Atkinson Hyperlegible",sans-serif';ctx.textBaseline='middle';ctx.fillText((pl.name||'?').trim().charAt(0).toUpperCase(),X,Y+0.5);ctx.textBaseline='top';});}
+}
+function crayon(a,b,color,k,u){const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),nx=-dy/len,ny=dx/len;ctx.lineCap='round';ctx.strokeStyle=color;for(let i=0;i<3;i++){const j=(hash(k+i)-0.5)*0.12*u,m=(hash(k+'m'+i)-0.5)*0.12*u;ctx.globalAlpha=i===0?0.95:0.55;ctx.lineWidth=(i===0?0.2:0.12)*u;ctx.beginPath();ctx.moveTo(a.x+nx*j,a.y+ny*j);ctx.quadraticCurveTo((a.x+b.x)/2+nx*m,(a.y+b.y)/2+ny*m,b.x+nx*j*0.6,b.y+ny*j*0.6);ctx.stroke();}ctx.globalAlpha=1;}
+function nearestNode(sx,sy){const wx=(sx-view.ox)/view.s,wy=(sy-view.oy)/view.s;const r0=Math.round(wy/RH);let best=null,bd=Math.max(0.55*SP/0.95,16/view.s)**2;for(let r=r0-2;r<=r0+2;r++){if(r<0||r>=ROWS)continue;const c0=Math.round((wx-(r&1?SP/2:0))/SP);for(let c=c0-2;c<=c0+2;c++){if(c<0||c>=COLS)continue;const id=GRID[r*COLS+c];if(id<0)continue;const n=NODES[id],d=(n.x-wx)**2+(n.y-wy)**2;if(d<bd){bd=d;best=id;}}}return best;}
+const ptrs=new Map();let gest=null;
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});if(ptrs.size===1)gest={type:'pan',sx:e.clientX,sy:e.clientY,ox:view.ox,oy:view.oy,moved:false};else if(ptrs.size===2){const[p1,p2]=[...ptrs.values()];gest={type:'pinch',d0:Math.hypot(p1.x-p2.x,p1.y-p2.y),s0:view.s,mx:(p1.x+p2.x)/2,my:(p1.y+p2.y)/2,ox:view.ox,oy:view.oy};}});
+cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});if(!gest)return;if(gest.type==='pan'){const dx=e.clientX-gest.sx,dy=e.clientY-gest.sy;if(Math.hypot(dx,dy)>7)gest.moved=true;if(gest.moved){view.ox=gest.ox+dx;view.oy=gest.oy+dy;draw();}}else if(gest.type==='pinch'&&ptrs.size>=2){const[p1,p2]=[...ptrs.values()];const d=Math.hypot(p1.x-p2.x,p1.y-p2.y),mx=(p1.x+p2.x)/2,my=(p1.y+p2.y)/2;const ns=Math.max(fitS*0.7,Math.min(90,gest.s0*d/gest.d0));const wx=(gest.mx-gest.ox)/gest.s0,wy=(gest.my-gest.oy)/gest.s0;view.s=ns;view.ox=mx-wx*ns;view.oy=my-wy*ns;draw();}});
+function endPtr(e){if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);if(gest&&gest.type==='pan'&&!gest.moved&&e.type==='pointerup'){const r=cv.getBoundingClientRect();onTap(nearestNode(e.clientX-r.left,e.clientY-r.top));}if(ptrs.size===0)gest=null;else if(gest&&gest.type==='pinch'){const p=[...ptrs.values()][0];gest={type:'pan',sx:p.x,sy:p.y,ox:view.ox,oy:view.oy,moved:true};}}
+cv.addEventListener('pointerup',endPtr);cv.addEventListener('pointercancel',endPtr);
+cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect();zoomAt(Math.exp(-e.deltaY*0.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+$('#zoom').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const z=+b.dataset.z;if(z===0)fitView();else zoomAt(z>0?1.5:1/1.5,VW/2,VH/2-60);});
+
+/* ================= UI ================= */
+const underline='<svg class="crayon-under" viewBox="0 0 220 14" aria-hidden="true"><path d="M3 8 C 50 3, 110 12, 217 5" stroke="#F2B705" stroke-width="7" fill="none" stroke-linecap="round" opacity=".9"/><path d="M6 10 C 60 6, 120 13, 214 8" stroke="#F2B705" stroke-width="3" fill="none" stroke-linecap="round" opacity=".5"/></svg>';
+function chipsHtml(){if(!G||!G.players.length||G.status==='setup')return'';const L=LENGTHS[G.len];return G.players.map((p,i)=>'<div class="chip'+(G.turn&&G.turn.p===i&&G.status==='playing'?' now':'')+'"><span class="dot" style="background:'+p.color+'"></span><span>'+esc(p.name)+'</span><b>$'+p.cash+'M</b><span>★'+majorsConnected(G,i)+'/'+L.majors+'</span></div>').join('');}
+function placeZoom(){const sh=$('#sheet');const top=sh.getBoundingClientRect().top;$('#zoom').style.top=Math.max(70,top-150)+'px';}
+function showOverlay(h){$('#overlayInner').innerHTML=h;$('#overlay').hidden=false;}
+function render(){
+  if(G)loadMap(G.map||'na');
+  const inMenu=mode==='lobby'||(G&&G.status==='setup');
+  $('#chips').innerHTML=chipsHtml();$('#brand').hidden=!inMenu&&!!G;$('#menuBtn').hidden=mode==='lobby';
+  const sh=$('#sheet');sh.classList.toggle('full',!!inMenu);sh.classList.toggle('collapsed',sheetState==='collapsed'&&!inMenu);
+  $('#zoom').hidden=!!inMenu;
+  $('#sheetBody').innerHTML=mode==='lobby'?lobbyHtml():(G&&G.status==='setup')?setupHtml():G?playHtml():'<p class="status">Loading the game…</p>';
+  const overlayOpen=!$('#overlay').hidden;
+  if(G&&G.lastEvent&&G.lastEvent.id>lastEventSeen&&G.status!=='setup'){lastEventSeen=G.lastEvent.id;const st=EV_STYLE[G.lastEvent.type]||{};showOverlay('<h3>'+(st.icon||'')+' '+esc(st.label||'Trouble')+'</h3><p>'+esc(G.lastEvent.text)+'</p><p><button class="btn go" data-act="closeOverlay" type="button">Got it</button></p>');}
+  else if(mode==='local'&&G&&G.status==='playing'&&G.turn.n!==lastTurnSeen&&G.players.length>1&&!overlayOpen){lastTurnSeen=G.turn.n;showOverlay('<h3>'+esc(curP().name)+'’s turn</h3><p class="muted">Pass the phone, then tap to start.</p><p><button class="btn go" data-act="closeOverlay" type="button">Start turn</button></p>');}
+  if(mode==='local'&&G&&G.turn&&overlayOpen)lastTurnSeen=G.turn.n;
+  if(G&&G.status==='over'&&!render.overShown&&$('#overlay').hidden){render.overShown=true;showOverlay('<h3>'+esc(G.players[G.winner].name)+' wins</h3><p class="muted">Final cash $'+G.players[G.winner].cash+'M with '+majorsConnected(G,G.winner)+' major cities linked.</p><p><button class="btn go" data-act="closeOverlay" type="button">Look at the map</button></p>');}
+  if(!G||G.status!=='over')render.overShown=false;
+  placeZoom();setTimeout(placeZoom,250);
+  if(G&&G.status!=='setup'&&!render.fitted){render.fitted=true;setTimeout(fitView,280);}
+  if(mode==='lobby'||(G&&G.status==='setup'))render.fitted=false;
+  document.title=(G&&G.status==='playing'&&mode!=='local'&&canAct()?'● Your turn · ':'')+'Wax & Rail';
+  draw();
+}
+function lengthsNote(){return Object.values(LENGTHS).map(L=>L.label+': $'+L.cash+'M and '+L.majors+' of 8 major cities').join('. ')+'.';}
+function lobbyHtml(){
+  let h='<h1 class="title">Wax & Rail</h1>'+underline+'<p class="muted">Draw track, haul freight, and race to link the big cities. Take your turn whenever you have a minute.</p>';
+  if(dbReady&&backend==='fire'){
+    const ids=fireIndex();h+='<h2>Live games</h2><div class="box">';
+    if(!ids.length)h+='<p class="muted small">Start a game, then send the invite link. Once someone joins, both phones update live.</p>';
+    for(const id of ids){let sm=null;try{sm=JSON.parse(ls('wr-fire-sum-'+id));}catch{}const names=sm&&sm.names.length?sm.names.map(esc).join(' vs '):'Loading…';let st='';if(sm){st=sm.status==='setup'?'Getting ready':sm.status==='over'?(sm.winner?esc(sm.winner)+' won':'Finished'):sm.turnSeat===seatId?'<b>Your turn</b>':'Waiting on '+esc(sm.turnName);st+=' · '+esc(MAPS[sm.map||'na']?.name||'');}
+      h+='<div class="game"><div><div><b>'+names+'</b></div><div class="small muted">'+st+'</div></div><div class="row"><button class="btn go" type="button" data-act="open" data-id="'+esc(id)+'">Open</button><button class="btn warn" type="button" data-act="delFire" data-id="'+esc(id)+'" aria-label="Remove from this phone">×</button></div></div>';}
+    h+='</div><p><button class="btn go" type="button" data-act="create">Start a live game</button></p>';
+    h+='<label class="f" for="jcode">Got an invite link that opened somewhere else? Paste it here.</label><div class="row"><input class="t" id="jcode" placeholder="Paste invite link" autocomplete="off"><button class="btn" type="button" data-act="joinCode">Join</button></div>';
+  }else if(dbReady){
+    h+='<h2>Games online</h2><div class="box">';
+    if(!lobbyGames.length)h+='<p class="muted">No games yet. Start one below.</p>';
+    for(const g of lobbyGames){const names=(g.players||[]).map(p=>esc(p.name)).join(' vs ')||'Waiting for players';const st=g.status==='setup'?'Getting ready':g.status==='over'?'Finished':'In progress';h+='<div class="game"><div><div><b>'+names+'</b></div><div class="small muted">'+st+' · '+esc(MAPS[g.map||'na']?.name||'')+' · '+(LENGTHS[g.len]?.label||'')+'</div></div><button class="btn go" type="button" data-act="open" data-id="'+esc(g.id)+'">Open</button></div>';}
+    h+='</div><p><button class="btn go" type="button" data-act="create">Start an online game</button></p>';
+  }else if(dbTried){
+    if(fireError)h+='<div class="box"><p><b>Live play couldn’t connect.</b></p><p class="small muted">'+esc(fireError)+'. Check the Firebase setup in the file. Play by text still works below.</p></div>';
+    let idx=[];try{idx=JSON.parse(ls('wr-link-index')||'[]');}catch{}
+    const games=idx.map(id=>{try{return JSON.parse(ls('wr-link-'+id));}catch{return null;}}).filter(Boolean);
+    h+='<h2>Play by text</h2><div class="box">';
+    if(!games.length)h+='<p class="muted small">Start a game, take your turn, then text the link. The other player taps it, plays, and texts one back.</p>';
+    for(const g of games){const names=g.players.map(p=>esc(p.name)).join(' vs ')||'New game';let st=g.status==='setup'?'Getting ready':g.status==='over'?'Finished':'';if(g.status==='playing'){const s=ls('wr-seat-'+g.id);st=s!=null&&+s===g.turn.p?'Your turn':'Waiting on '+esc(g.players[g.turn.p].name);}h+='<div class="game"><div><div><b>'+names+'</b></div><div class="small muted">'+st+' · '+esc(MAPS[g.map||'na']?.name||'')+'</div></div><div class="row"><button class="btn go" type="button" data-act="openLink" data-id="'+esc(g.id)+'">Open</button><button class="btn warn" type="button" data-act="delLink" data-id="'+esc(g.id)+'" aria-label="Remove game">×</button></div></div>';}
+    h+='</div><p class="row"><button class="btn go" type="button" data-act="newLink">New game by text</button></p>';
+    h+='<label class="f" for="code">Got a turn link that opened somewhere else? Paste it here.</label><div class="row"><input class="t" id="code" placeholder="Paste link or code" autocomplete="off"><button class="btn" type="button" data-act="loadCode">Load</button></div>';
+  }else h+='<p class="muted">Connecting…</p>';
+  let localSaved=ls('wr-local');
+  h+='<h2>Same phone</h2><div class="row"><button class="btn" type="button" data-act="local">New pass-and-play game</button>'+(localSaved?'<button class="btn" type="button" data-act="localResume">Resume pass-and-play</button>':'')+'</div>';
+  h+='<h2>How to play</h2><div class="small"><p><b>Build.</b> Tap any dot to sketch track by the cheapest route from a major city (hexagon) or your own line. Tap again to build. Clear ground $1M, mountains $2M, peaks $5M, rivers +$2M, cities $3–5M, ferries as marked. Up to $20M a turn.</p><p><b>Haul.</b> Each demand card asks for a good at a city. Tap a demand to light up where to get it (yellow) and where it goes (pink). Pick it up, deliver it, get paid, draw a new card.</p><p><b>Move.</b> Tap a highlighted dot, then tap again to go. Riding someone else’s track costs $4M per owner per turn.</p><p><b>Events.</b> New cards sometimes bring trouble: floods wash out bridges, derailments cost a load and a turn, strikes shut down pickups, blizzards slow trains, and the taxman visits.</p><p><b>Win.</b> Link the required major cities in one network and reach the cash goal.</p></div>';
+  return h;
+}
+function setupHtml(){
+  const L=LENGTHS[G.len];const taken=G.players.map(p=>p.color);
+  let h='<h1 class="title">'+(mode==='local'?'Pass and play':mode==='link'?'Play by text':'New game')+'</h1>'+underline;
+  h+='<h2>Map</h2><div class="seg">'+Object.entries(MAPS).map(([k,m])=>'<button class="btn" type="button" data-act="map" data-map="'+k+'" aria-pressed="'+(G.map===k)+'">'+esc(m.name)+'</button>').join('')+'</div><p class="small muted">'+esc(MAPS[G.map].blurb)+'</p>';
+  h+='<h2>Game length</h2><div class="seg">'+Object.entries(LENGTHS).map(([k,l])=>'<button class="btn" type="button" data-act="len" data-len="'+k+'" aria-pressed="'+(G.len===k)+'">'+l.label+'</button>').join('')+'</div><p class="small muted">Win with $'+L.cash+'M and '+L.majors+' of 8 major cities linked.</p>';
+  h+='<h2>Events</h2><div class="seg"><button class="btn" type="button" data-act="ev" data-on="1" aria-pressed="'+!!G.eventsOn+'">On</button><button class="btn" type="button" data-act="ev" data-on="0" aria-pressed="'+!G.eventsOn+'">Off</button></div>';
+  h+='<h2>Players</h2><div class="box">'+(G.players.length?G.players.map((p,i)=>'<div class="row" style="padding:4px 0"><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:'+p.color+'"></span><b>'+esc(p.name)+'</b>'+(mode==='link'&&i===0?' <span class="small muted">(you)</span>':'')+'</div>').join(''):'<p class="muted">Nobody’s joined yet.</p>')+'</div>';
+  const mine=mode==='online'&&G.players.some(p=>p.seat===seatId);
+  if((mode!=='online'||!mine)&&G.players.length<4){
+    const free=COLORS.find(c=>!taken.includes(c[1]));
+    h+='<h2>'+(mode==='online'?'Join this game':mode==='link'&&!G.players.length?'Add yourself first':'Add a player')+'</h2><label class="f" for="nm">Name</label><input class="t" id="nm" maxlength="14" placeholder="'+(G.players.length?'Dad':'Aaron')+'" autocomplete="off"><label class="f">Crayon</label><div class="swatches">'+COLORS.map(c=>'<button type="button" class="sw" data-color="'+c[1]+'" aria-label="'+c[0]+'" aria-pressed="'+(free&&free[1]===c[1])+'" style="background:'+c[1]+'"'+(taken.includes(c[1])?' disabled':'')+'></button>').join('')+'</div><p style="margin-top:12px"><button class="btn go" type="button" data-act="join">'+(mode==='online'?'Join game':'Add player')+'</button></p>';
+  }
+  if(mode==='online'&&backend==='fire')h+='<div class="box"><p><b>Invite the other players</b></p><p class="small muted">Send this link once. After they join, the game lives on their phone and updates live.</p><div class="row"><button class="btn go" type="button" data-act="invite">Send invite</button><button class="btn" type="button" data-act="copyInvite">Copy link</button></div></div>';
+  else if(mode==='online'&&mine)h+='<p class="small muted">Send the other players this page’s link. They open it, tap this game, and join.</p>';
+  if(mode==='link')h+='<p class="small muted">You build first. After your turn you’ll get a link to text to the next player.</p>';
+  h+='<p style="margin-top:16px" class="row"><button class="btn go" type="button" data-act="start"'+(G.players.length<2?' disabled':'')+'>Start game</button><button class="btn" type="button" data-act="lobby">Back</button></p>';
+  return h;
+}
+function demandHtml(pl,ci,canDel){return'<div class="card">'+pl.cards[ci].map((d,di)=>{const sel=selDemand&&selDemand.c===ci&&selDemand.d===di;const ok=canDel&&pl.pos===d.dest&&pl.loads.includes(d.good);return'<button type="button" class="dem'+(sel?' sel':'')+'" data-act="dem" data-c="'+ci+'" data-d="'+di+'"><span>'+esc(d.good)+' → '+esc(CITY.get(d.dest).name)+(ok?' <span class="ok">✓</span>':'')+'</span><span class="pay">$'+d.pay+'M</span></button>';}).join('')+'</div>';}
+function playHtml(){
+  const t=G.turn,cp=curP(),me=canAct(),L=LENGTHS[G.len];const vi=mySeatIndex();const viewer=vi>=0?G.players[vi]:null;
+  let h='';
+  if(G.status==='over')h+='<div class="status"><span class="dot" style="background:'+G.players[G.winner].color+'"></span>'+esc(G.players[G.winner].name)+' won the game</div><p class="row"><button class="btn" type="button" data-act="lobby">Back to games</button>'+(mode==='link'?'<button class="btn" type="button" data-act="share">Send final map</button>':'')+'</p>';
+  else{const ph=t.kind==='init'?'Building ('+(t.seqIdx<G.players.length?'first':'second')+' round)':t.phase==='move'?'Moving':'Building';
+    h+='<div class="status"><span class="dot" style="background:'+cp.color+'"></span>'+(me?(mode==='local'?esc(cp.name)+': ':'Your turn: ')+ph:'Waiting for '+esc(cp.name))+'</div>';
+    if(!me&&mode==='link'&&vi>=0)h+='<p class="row"><button class="btn go" type="button" data-act="share">Send turn link again</button><button class="btn" type="button" data-act="copyLink">Copy link</button></p>';
+    if(mode==='online'&&backend==='fire'&&vi<0)h+='<div class="box"><p><b>Playing on a new phone?</b> Tap your name to take your seat.</p><div class="row">'+G.players.map((p,i)=>'<button class="btn" type="button" data-act="claim" data-i="'+i+'"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'+p.color+';margin-right:6px;vertical-align:-1px"></span>'+esc(p.name)+'</button>').join('')+'</div></div>';
+    if(!me&&mode==='link'&&vi<0)h+='<p><button class="btn" type="button" data-act="pickSeat">Choose who you are</button></p>';}
+  if(G.status==='playing'&&me){
+    if(preview&&preview.type==='build'){const left=BUILD_BUDGET-t.spent;const ok=preview.cost<=left&&preview.cost<=cp.cash;h+='<div class="box hl"><p><b>'+preview.edges.length+' segment'+(preview.edges.length>1?'s':'')+' for $'+preview.cost+'M</b> <span class="muted">($'+left+'M left this turn)</span></p>'+(ok?'':'<p class="small" style="color:var(--danger)">'+(preview.cost>cp.cash?'Not enough cash.':'Over the $20M turn limit. Pick a closer dot.')+'</p>')+'<div class="row"><button class="btn go" type="button" data-act="build"'+(ok?'':' disabled')+'>Build it</button><button class="btn" type="button" data-act="clear">Cancel</button></div></div>';}
+    if(preview&&preview.type==='move'){h+='<div class="box hl"><p><b>Move '+preview.steps+' milepost'+(preview.steps>1?'s':'')+'</b>'+(preview.fee?' · pay $'+preview.fee+'M track fee':'')+'</p><div class="row"><button class="btn go" type="button" data-act="move">Go</button><button class="btn" type="button" data-act="clear">Cancel</button></div></div>';}
+    if(t.kind==='init'){h+='<p class="muted small">Tap a dot to sketch track from any major city (hexagon). Tap again, or press Build, to lay it. $'+(BUILD_BUDGET-t.spent)+'M left to spend this turn.</p><div class="row">'+(t.builds.length?'<button class="btn" type="button" data-act="undo">Undo last build</button>':'')+'<button class="btn go" type="button" data-act="end">End turn</button></div>';}
+    else if(t.phase==='move'){
+      if(cp.pos==null)h+='<p class="muted small">Place your train: tap any city your track reaches.</p>';
+      else{h+='<p class="muted small">'+t.moves+' of '+TRAINS[cp.train].speed+' mileposts left'+(t.moves<TRAINS[cp.train].speed&&!t.acted?' (slowed by trouble on the line)':'')+'. Tap a highlighted dot to move.</p>';
+        const c=CITY.get(cp.pos);if(c){const strike=inEvent(G,'strike',cp.pos);h+='<div class="box"><p><b>At '+esc(c.name)+'</b></p>';if(strike)h+='<p class="small" style="color:var(--danger)">Strike here. No pickups or deliveries.</p>';const cap=TRAINS[cp.train].cap;
+          if(c.goods.length)h+='<div class="row">'+c.goods.map(g=>'<button class="btn" type="button" data-act="pick" data-g="'+esc(g)+'"'+(cp.loads.length>=cap||strike?' disabled':'')+'>Pick up '+esc(g)+'</button>').join('')+'</div>';else h+='<p class="small muted">Nothing to pick up here.</p>';
+          const dels=[];cp.cards.forEach((card,ci)=>card.forEach((d,di)=>{if(d.dest===cp.pos&&cp.loads.includes(d.good))dels.push('<button class="btn go" type="button" data-act="deliver" data-c="'+ci+'" data-d="'+di+'"'+(strike?' disabled':'')+'>Deliver '+esc(d.good)+' for $'+d.pay+'M</button>');}));if(dels.length)h+='<div class="row" style="margin-top:8px">'+dels.join('')+'</div>';h+='</div>';}}
+      h+='<div class="row"><button class="btn go" type="button" data-act="doneMove"'+(cp.pos==null?' disabled':'')+'>Done moving, now build</button>'+(!t.acted?'<button class="btn warn" type="button" data-act="discard">Swap all cards (ends turn)</button>':'')+'</div>';
+    }else{
+      if(t.upgraded)h+='<p class="muted small">You upgraded this turn, so no building.</p>';
+      else{h+='<p class="muted small">Tap a dot to sketch track, tap again to build. $'+(BUILD_BUDGET-t.spent)+'M left this turn.</p>';if(t.spent===0&&UPG[cp.train].length)h+='<div class="row" style="margin-bottom:8px">'+UPG[cp.train].map(u=>'<button class="btn" type="button" data-act="upg" data-u="'+u+'">Upgrade to '+TRAINS[u].name+' ($20M)</button>').join('')+'</div>';}
+      h+='<div class="row">'+(t.builds.length?'<button class="btn" type="button" data-act="undo">Undo last build</button>':'')+'<button class="btn go" type="button" data-act="end">End turn</button></div>';
+    }
+  }
+  if(selCity!=null){const c=CITY.get(selCity);h+='<p class="small"><b>'+esc(c.name)+'</b> <span class="muted">· '+['','Small','Medium','Major'][c.size]+' city'+(c.goods.length?' · makes '+c.goods.map(esc).join(', '):'')+'</span></p>';}
+  if((G.events||[]).length)h+='<h2>Trouble on the line</h2><ul class="log ev">'+G.events.map(e=>'<li>'+EV_STYLE[e.type].icon+' '+esc(e.text)+'</li>').join('')+'</ul>';
+  if(viewer){const tr=TRAINS[viewer.train];
+    h+='<h2>'+(mode==='local'?esc(viewer.name)+'’s train':'Your train')+': '+tr.name+' · speed '+tr.speed+' · holds '+tr.cap+'</h2><div class="loads">'+(viewer.loads.length?viewer.loads.map((l,i)=>'<span class="load">'+esc(l)+(me&&viewer===cp?'<button type="button" data-act="dump" data-i="'+i+'" aria-label="Dump '+esc(l)+'">×</button>':'')+'</span>').join(''):'<span class="empty-load">Empty</span>')+'</div>';
+    h+='<h2>Demand cards</h2><p class="small legend"><span class="key" style="background:var(--src)"></span>Pick up &nbsp; <span class="key" style="background:var(--dest)"></span>Deliver. Tap a demand to light up the map.</p><div class="cards">'+viewer.cards.map((_,ci)=>demandHtml(viewer,ci,me&&viewer===cp)).join('')+'</div>';}
+  h+='<p class="goal muted" style="margin-top:12px">Goal: $'+L.cash+'M and '+L.majors+' of 8 major cities linked. Map: '+esc(MAPS[G.map].name)+'.</p>';
+  if(G.log.length)h+='<h2>Recent</h2><ul class="log">'+G.log.slice(0,6).map(l=>'<li>'+esc(l)+'</li>').join('')+'</ul>';
+  return h;
+}
+function regenCards(){for(const p of G.players)p.cards=[makeCard(),makeCard(),makeCard()];}
+
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
+  switch(a){
+    case 'closeOverlay':$('#overlay').hidden=true;render();break;
+    case 'open':openOnline(b.dataset.id);break;
+    case 'create':createOnline('short');break;
+    case 'local':startLocal(false);break;
+    case 'localResume':startLocal(true);break;
+    case 'newLink':startLink(null);break;
+    case 'openLink':startLink(b.dataset.id);if(linkSeat()==null&&G.status!=='setup')askSeat();break;
+    case 'delLink':if(confirm('Remove this game from this phone?')){ls('wr-link-'+b.dataset.id,null);let idx=[];try{idx=JSON.parse(ls('wr-link-index')||'[]');}catch{}ls('wr-link-index',JSON.stringify(idx.filter(x=>x!==b.dataset.id)));render();}break;
+    case 'loadCode':{const v=($('#code').value||'').trim();if(v)receiveCode(v);break;}
+    case 'seat':setLinkSeat(+b.dataset.i);$('#overlay').hidden=true;render();break;
+    case 'pickSeat':askSeat();break;
+    case 'share':shareTurn();break;
+    case 'copyLink':copyTurn('link');break;
+    case 'lobby':goLobby();break;
+    case 'invite':shareInvite();break;
+    case 'copyInvite':copyText(inviteLink(),'Invite link copied.');break;
+    case 'delFire':if(confirm('Remove this game from this phone? You can rejoin with the invite link.')){fireIndexDel(b.dataset.id);render();}break;
+    case 'joinCode':{const v=($('#jcode').value||'').trim();const m=v.match(/(?:#j=|#g-)?([a-z0-9]+-[a-z0-9]+)\s*$/i);if(m)openOnline(m[1]);else toast('That doesn’t look like an invite link.');break;}
+    case 'claim':if(G&&confirm('Take the seat for '+G.players[+b.dataset.i].name+' on this phone?')){G.players[+b.dataset.i].seat=seatId;commit();}break;
+    case 'map':if(G&&G.status==='setup'){G.map=b.dataset.map;loadMap(G.map);regenCards();render.fitted=false;resize();commit();}break;
+    case 'len':if(G&&G.status==='setup'){G.len=b.dataset.len;commit();}break;
+    case 'ev':if(G&&G.status==='setup'){G.eventsOn=b.dataset.on==='1';commit();}break;
+    case 'join':{const nm=($('#nm').value||'').trim()||$('#nm').placeholder;const sel=document.querySelector('.sw[aria-pressed="true"]');const color=sel?sel.dataset.color:(COLORS.find(c=>!G.players.some(p=>p.color===c[1]))||COLORS[0])[1];if(G.players.some(p=>p.color===color)){toast('That crayon’s taken.');break;}addPlayer(G,mode==='online'?seatId:mode+'-'+G.players.length,nm.slice(0,14),color);commit();break;}
+    case 'start':if(G.players.length>=2){if(mode==='link')setLinkSeat(0);startGame(G);commit();}break;
+    case 'build':doBuild();break;
+    case 'move':doMove();break;
+    case 'clear':preview=null;render();break;
+    case 'undo':undoBuild();break;
+    case 'end':finishTurn();break;
+    case 'doneMove':doneMoving();break;
+    case 'discard':if(confirm('Swap all three cards for new ones? This ends your turn.'))discardHand();break;
+    case 'upg':upgrade(+b.dataset.u);break;
+    case 'pick':pickup(b.dataset.g);break;
+    case 'dump':dump(+b.dataset.i);break;
+    case 'deliver':deliver(+b.dataset.c,+b.dataset.d);break;
+    case 'dem':{const c=+b.dataset.c,d=+b.dataset.d;selDemand=selDemand&&selDemand.c===c&&selDemand.d===d?null:{c,d};render();break;}
+  }
+});
+document.addEventListener('click',e=>{const sw=e.target.closest('.sw');if(!sw||sw.disabled)return;document.querySelectorAll('.sw').forEach(x=>x.setAttribute('aria-pressed',String(x===sw)));});
+$('#grab').addEventListener('click',()=>{sheetState=sheetState==='collapsed'?'normal':'collapsed';render();});
+$('#menuBtn').addEventListener('click',goLobby);
+window.addEventListener('hashchange',()=>{const m=location.hash.match(/^#t=(.+)$/);if(m)receiveCode(m[1]);});
+
+loadMap('na');
+new ResizeObserver(resize).observe(cv);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(draw);
+resize();
+{const m=location.hash.match(/^#t=(.+)$/);if(m)receiveCode(m[1]);else render();}
+initDb();
+
+</script>
+</body>
+</html>
